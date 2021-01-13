@@ -1,0 +1,4 @@
+C:\Users\Janusz\Desktop\grk-cw8\Debug\grk-cw8.exe
+C:\Users\Janusz\Desktop\grk-cw8\Debug\grk-cw8.pdb
+C:\Users\Janusz\Desktop\projekt\Debug\grk-cw8.exe
+C:\Users\Janusz\Desktop\projekt\Debug\grk-cw8.pdb

@@ -15,12 +15,14 @@
 Core::Shader_Loader shaderLoader;
 GLuint programColor;
 GLuint programTexture;
+GLuint programBlur;
+GLuint programFinal;
 
-obj::Model planeModel, shipModel;
-Core::RenderContext planeContext, shipContext;
-GLuint groundTexture;
+obj::Model planeModel, shipModel, boxModel;
+Core::RenderContext planeContext, shipContext, boxContext;
+GLuint groundTexture, metalTexture;
 
-glm::vec3 cameraPos = glm::vec3(0, 3, 10);
+glm::vec3 cameraPos = glm::vec3(0, 0, 10);
 glm::vec3 cameraDir;
 glm::vec3 cameraSide;
 float cameraAngle = 0;
@@ -33,6 +35,7 @@ glm::vec3 lightDir = glm::normalize(glm::vec3(0.5, -1, -0.5));
 int oldX = 0, oldY = 0, divX, divY;
 
 
+
 Physics pxScene(9.8 /* gravity (m/s^2) */);
 
 
@@ -41,6 +44,45 @@ double physicsTimeToProcess = 0;
 
 PxRigidStatic *planeBody, *shipBody = nullptr;
 PxMaterial *planeMaterial, *shipMaterial = nullptr;
+
+int SCR_WIDTH = 600;
+int SCR_HEIGHT = 600;
+
+unsigned int hdrFBO;
+unsigned int colorBuffers[2];
+unsigned int rboDepth;
+unsigned int pingpongFBO[2];
+unsigned int pingpongColorbuffers[2];
+
+bool bloom = true;
+float exposure = 2.5f;
+
+unsigned int quadVAO = 0;
+unsigned int quadVBO;
+void renderQuad()
+{
+    if (quadVAO == 0)
+    {
+        float quadVertices[] = {
+            -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+             1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+             1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+        };
+        glGenVertexArrays(1, &quadVAO);
+        glGenBuffers(1, &quadVBO);
+        glBindVertexArray(quadVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    }
+    glBindVertexArray(quadVAO);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glBindVertexArray(0);
+}
 
 struct Renderable {
     Core::RenderContext* context;
@@ -53,11 +95,14 @@ void initRenderables()
 {
     planeModel = obj::loadModelFromFile("models/plane.obj");
     shipModel = obj::loadModelFromFile("models/spaceship.obj");
+    boxModel = obj::loadModelFromFile("models/box.obj");
 
+    boxContext.initFromOBJ(boxModel);
     planeContext.initFromOBJ(planeModel);
     shipContext.initFromOBJ(shipModel);
 
     groundTexture = Core::LoadTexture("textures/sand.jpg");
+    metalTexture = Core::LoadTexture("textures/box.jpg");
 
 }
 
@@ -153,6 +198,77 @@ void drawObjectColor(Core::RenderContext* context, glm::mat4 modelMatrix, glm::v
     glUseProgram(0);
 }
 
+void drawCube(glm::mat4 modelMatrix)
+{
+    glm::vec3 color = glm::vec3(1,0.843f,0);
+    glUseProgram(programTexture);
+
+    glUniform3f(glGetUniformLocation(programTexture, "lightDir"), lightDir.x, lightDir.y, lightDir.z);
+    Core::SetActiveTexture(metalTexture, "textureSampler", programTexture, 0);
+
+    glm::mat4 transformation = perspectiveMatrix * cameraMatrix * modelMatrix;
+    glUniformMatrix4fv(glGetUniformLocation(programTexture, "modelViewProjectionMatrix"), 1, GL_FALSE, (float*)&transformation);
+    glUniformMatrix4fv(glGetUniformLocation(programTexture, "modelMatrix"), 1, GL_FALSE, (float*)&modelMatrix);
+
+    Core::DrawContext(boxContext);
+
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(0.60, 0.85, 1.05)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-0.60, 0.85, 1.05)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-0.60, -0.85, 1.05)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(0.60, -0.85, 1.05)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(0.85, 0.60, 1.05)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-0.85, 0.60, 1.05)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-0.85, -0.60, 1.05)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(0.85, -0.60, 1.05)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(0.60, 0.85, -1.05)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-0.60, 0.85, -1.05)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-0.60, -0.85, -1.05)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(0.60, -0.85, -1.05)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(0.85, 0.60, -1.05)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-0.85, 0.60, -1.05)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-0.85, -0.60, -1.05)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(0.85, -0.60, -1.05)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(1.05, 0.85, 0.60)) * glm::rotate((float)glm::radians(180.f), glm::vec3(1, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(1.05, -0.85, 0.60)) * glm::rotate((float)glm::radians(180.f), glm::vec3(1, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(1.05, -0.85, -0.60)) * glm::rotate((float)glm::radians(180.f), glm::vec3(1, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(1.05, 0.85, -0.60)) * glm::rotate((float)glm::radians(180.f), glm::vec3(1, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(1.05, 0.60, 0.85)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(1.05, -0.60, 0.85)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(1.05, -0.60, -0.85)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(1.05, 0.60, -0.85)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-1.05, 0.85, 0.60)) * glm::rotate((float)glm::radians(180.f), glm::vec3(1, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-1.05, -0.85, 0.60)) * glm::rotate((float)glm::radians(180.f), glm::vec3(1, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-1.05, -0.85, -0.60)) * glm::rotate((float)glm::radians(180.f), glm::vec3(1, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-1.05, 0.85, -0.60)) * glm::rotate((float)glm::radians(180.f), glm::vec3(1, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-1.05, 0.60, 0.85)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-1.05, -0.60, 0.85)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-1.05, -0.60, -0.85)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-1.05, 0.60, -0.85)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 0, 1)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(0.60, 1.05, 0.85)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-0.60, 1.05, 0.85)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-0.60, 1.05, -0.85)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(0.60, 1.05, -0.85)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(0.85, 1.05, 0.60)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 1, 0)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-0.85, 1.05, 0.60)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 1, 0)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-0.85, 1.05, -0.60)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 1, 0)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(0.85, 1.05, -0.60)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 1, 0)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(0.60, -1.05, 0.85)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-0.60, -1.05, 0.85)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-0.60, -1.05, -0.85)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(0.60, -1.05, -0.85)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(0.85, -1.05, 0.60)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 1, 0)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-0.85, -1.05, 0.60)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 1, 0)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(-0.85, -1.05, -0.60)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 1, 0)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+    drawObjectColor(&boxContext, modelMatrix * glm::translate(glm::vec3(0.85, -1.05, -0.60)) * glm::rotate((float)glm::radians(90.f), glm::vec3(0, 1, 0)) * glm::scale(glm::vec3(0.3f, 0.05f, 0.05f)), color);
+
+    glUseProgram(0);
+}
+
 void drawObjectTexture(Core::RenderContext * context, glm::mat4 modelMatrix, GLuint textureId)
 {
     GLuint program = programTexture;
@@ -170,7 +286,6 @@ void drawObjectTexture(Core::RenderContext * context, glm::mat4 modelMatrix, GLu
 
     glUseProgram(0);
 }
-
 void renderScene()
 {
     double time = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
@@ -190,7 +305,10 @@ void renderScene()
     perspectiveMatrix = Core::createPerspectiveMatrix();
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glClearColor(0.0f, 0.1f, 0.3f, 1.0f);
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     updateTransforms();
 
@@ -201,6 +319,35 @@ void renderScene()
     glm::mat4 shipMatrix = glm::translate(cameraPos + cameraDir * 0.5f) * glm::mat4_cast(glm::inverse(rotation)) * glm::translate(glm::vec3(0, -0.25f, 0)) * glm::rotate(glm::radians(180.0f), glm::vec3(0, 1, 0)) * glm::scale(glm::vec3(0.25f));
     drawObjectTexture(&shipContext, shipMatrix, groundTexture);
 
+    drawCube(glm::translate(glm::vec3(0, 0, 0)));
+
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    bool horizontal = true, first_iteration = true;
+    unsigned int amount = 10;
+    glUseProgram(programBlur);
+    for (unsigned int i = 0; i < amount; i++)
+    {
+        glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
+        glUniform1i(glGetUniformLocation(programBlur, "horizontal"), horizontal);
+        glBindTexture(GL_TEXTURE_2D, first_iteration ? colorBuffers[1] : pingpongColorbuffers[!horizontal]);
+        renderQuad();
+        horizontal = !horizontal;
+        if (first_iteration)
+            first_iteration = false;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glUseProgram(programFinal);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, colorBuffers[0]);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, pingpongColorbuffers[!horizontal]);
+    glUniform1i(glGetUniformLocation(programFinal, "bloom"), bloom);
+    glUniform1f(glGetUniformLocation(programFinal, "exposure"), exposure);
+    renderQuad();
+
     glutSwapBuffers();
 }
 
@@ -210,9 +357,58 @@ void init()
     glEnable(GL_DEPTH_TEST);
     programColor = shaderLoader.CreateProgram("shaders/shader_color.vert", "shaders/shader_color.frag");
     programTexture = shaderLoader.CreateProgram("shaders/shader_tex.vert", "shaders/shader_tex.frag");
+    programBlur = shaderLoader.CreateProgram("shaders/gaussian.vert", "shaders/gaussian.frag");
+    programFinal = shaderLoader.CreateProgram("shaders/final.vert", "shaders/final.frag");
 
     initRenderables();
     initPhysicsScene();
+
+    glGenFramebuffers(1, &hdrFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
+    
+    glGenTextures(2, colorBuffers);
+    for (unsigned int i = 0; i < 2; i++)
+    {
+        glBindTexture(GL_TEXTURE_2D, colorBuffers[i]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, colorBuffers[i], 0);
+    }
+    
+    glGenRenderbuffers(1, &rboDepth);
+    glBindRenderbuffer(GL_RENDERBUFFER, rboDepth);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, SCR_WIDTH, SCR_HEIGHT);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
+    unsigned int attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+    glDrawBuffers(2, attachments);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        std::cout << "Framebuffer not complete!" << std::endl;
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    glGenFramebuffers(2, pingpongFBO);
+    glGenTextures(2, pingpongColorbuffers);
+    for (unsigned int i = 0; i < 2; i++)
+    {
+        glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i]);
+        glBindTexture(GL_TEXTURE_2D, pingpongColorbuffers[i]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongColorbuffers[i], 0);
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+            std::cout << "Framebuffer not complete!" << std::endl;
+    }
+
+    glUseProgram(programBlur);
+    glUniform1i(glGetUniformLocation(programBlur, "image"), 0);
+    glUseProgram(programFinal);
+    glUniform1i(glGetUniformLocation(programFinal, "scene"), 0);
+    glUniform1i(glGetUniformLocation(programFinal, "bloomBlur"), 1);
 }
 
 void shutdown()

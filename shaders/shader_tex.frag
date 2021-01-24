@@ -1,5 +1,8 @@
 #version 430 core
 
+layout (location = 0) out vec4 FragColor;
+layout (location = 1) out vec4 BrightColor;
+
 uniform sampler2D textureSampler;
 uniform vec3 lightDir;
 
@@ -13,5 +16,6 @@ void main()
 	vec3 normal = normalize(interpNormal);
 	float ambient = 0.2;
 	float diffuse = max(dot(normal, -lightDir), 0.0);
-	gl_FragColor = vec4(color * (ambient + (1-ambient) * diffuse), 1.0);
+	FragColor = vec4(color * (ambient + (1-ambient) * diffuse), 1.0);
+	BrightColor = vec4(0.0, 0.0, 0.0, 1.0);
 }

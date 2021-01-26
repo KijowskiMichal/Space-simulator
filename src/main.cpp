@@ -15,10 +15,12 @@
 Core::Shader_Loader shaderLoader;
 GLuint programColor;
 GLuint programTexture;
+GLuint programSkybox;
 
-obj::Model planeModel, shipModel;
-Core::RenderContext planeContext, shipContext;
+obj::Model planeModel, shipModel, skyboxModel;
+Core::RenderContext planeContext, shipContext, skyboxContext;
 GLuint groundTexture;
+GLuint skyboxTexture[6];
 
 glm::vec3 cameraPos = glm::vec3(0, 3, 10);
 glm::vec3 cameraDir;
@@ -53,12 +55,20 @@ void initRenderables()
 {
     planeModel = obj::loadModelFromFile("models/plane.obj");
     shipModel = obj::loadModelFromFile("models/spaceship.obj");
+    skyboxModel = obj::loadModelFromFile("models/skybox.obj");
 
     planeContext.initFromOBJ(planeModel);
     shipContext.initFromOBJ(shipModel);
+    skyboxContext.initFromOBJ(skyboxModel);
 
     groundTexture = Core::LoadTexture("textures/sand.jpg");
 
+    skyboxTexture[0] = Core::LoadTextureSkybox("textures/back.png");
+    skyboxTexture[1] = Core::LoadTextureSkybox("textures/bottom.png");
+    skyboxTexture[2] = Core::LoadTextureSkybox("textures/front.png");
+    skyboxTexture[3] = Core::LoadTextureSkybox("textures/left.png");
+    skyboxTexture[4] = Core::LoadTextureSkybox("textures/right.png");
+    skyboxTexture[5] = Core::LoadTextureSkybox("textures/top.png");
 }
 
 void initPhysicsScene()
@@ -122,8 +132,7 @@ glm::mat4 createCameraMatrix()
     glm::quat x = glm::angleAxis(divX / 50.0f, glm::vec3(0, 1, 0));
     glm::quat y = glm::angleAxis(divY / 50.0f, glm::vec3(1, 0, 0));
     glm::quat z = glm::angleAxis(cameraAngle, glm::vec3(0, 0, 1));
-    glm::quat xy = x * y * z;
-    rotation = glm::normalize(xy * rotation);
+    rotation = glm::normalize(x * y * z * rotation);
 
     divX = 0;
     divY = 0;
@@ -153,7 +162,7 @@ void drawObjectColor(Core::RenderContext* context, glm::mat4 modelMatrix, glm::v
     glUseProgram(0);
 }
 
-void drawObjectTexture(Core::RenderContext * context, glm::mat4 modelMatrix, GLuint textureId)
+void drawObjectTexture(Core::RenderContext* context, glm::mat4 modelMatrix, GLuint textureId)
 {
     GLuint program = programTexture;
 
@@ -169,6 +178,35 @@ void drawObjectTexture(Core::RenderContext * context, glm::mat4 modelMatrix, GLu
     Core::DrawContext(*context);
 
     glUseProgram(0);
+}
+
+void drawObjectTexture(GLuint program, Core::RenderContext* context, glm::mat4 modelMatrix, GLuint textureId) {
+
+    glUseProgram(program);
+
+    glUniform3f(glGetUniformLocation(program, "lightDir"), lightDir.x, lightDir.y, lightDir.z);
+    Core::SetActiveTexture(textureId, "textureSampler", program, 0);
+
+    glm::mat4 transformation = perspectiveMatrix * cameraMatrix * modelMatrix;
+    glUniformMatrix4fv(glGetUniformLocation(program, "modelViewProjectionMatrix"), 1, GL_FALSE, (float*)&transformation);
+    glUniformMatrix4fv(glGetUniformLocation(program, "modelMatrix"), 1, GL_FALSE, (float*)&modelMatrix);
+
+    Core::DrawContext(*context);
+
+    glUseProgram(0);
+}
+
+void renderSkybox(glm::vec3 userPos) {
+
+    int sc = 70;
+    glm::mat4 matrix = glm::translate(glm::vec3(userPos.x, userPos.y-sc, userPos.z));
+    glm::mat4 scale = glm::scale(glm::vec3(sc, sc, sc));
+    drawObjectTexture(programSkybox, &skyboxContext, matrix*glm::translate(glm::vec3(0,sc, sc)) * glm::rotate(glm::radians(90.0f), glm::vec3(1, 0, 0)) * scale, skyboxTexture[0]); //back
+    drawObjectTexture(programSkybox, &skyboxContext, matrix*glm::translate(glm::vec3(0,0,0)) * scale, skyboxTexture[1]); //bottom
+    drawObjectTexture(programSkybox, &skyboxContext, matrix*glm::translate(glm::vec3(0, sc, -sc)) * glm::rotate(glm::radians(90.0f), glm::vec3(1, 0, 0)) * scale, skyboxTexture[2]); //front
+    drawObjectTexture(programSkybox, &skyboxContext, matrix*glm::translate(glm::vec3(sc, sc, 0)) * glm::rotate(glm::radians(90.0f), glm::vec3(0, 0, 1)) * scale, skyboxTexture[4]); //right
+    drawObjectTexture(programSkybox, &skyboxContext, matrix*glm::translate(glm::vec3(-sc, sc, 0)) * glm::rotate(glm::radians(90.0f), glm::vec3(0, 0, 1)) * scale, skyboxTexture[3]); //left
+    drawObjectTexture(programSkybox, &skyboxContext, matrix*glm::translate(glm::vec3(0, 2*sc, 0)) * scale, skyboxTexture[5]); //top
 }
 
 void renderScene()
@@ -187,7 +225,7 @@ void renderScene()
     }
 
     cameraMatrix = createCameraMatrix();
-    perspectiveMatrix = Core::createPerspectiveMatrix();
+    perspectiveMatrix = Core::createPerspectiveMatrix(0.1f, 200.f);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearColor(0.0f, 0.1f, 0.3f, 1.0f);
@@ -201,6 +239,10 @@ void renderScene()
     glm::mat4 shipMatrix = glm::translate(cameraPos + cameraDir * 0.5f) * glm::mat4_cast(glm::inverse(rotation)) * glm::translate(glm::vec3(0, -0.25f, 0)) * glm::rotate(glm::radians(180.0f), glm::vec3(0, 1, 0)) * glm::scale(glm::vec3(0.25f));
     drawObjectTexture(&shipContext, shipMatrix, groundTexture);
 
+    glDepthMask(GL_FALSE);
+    renderSkybox(cameraPos);
+    glDepthMask(GL_TRUE);
+
     glutSwapBuffers();
 }
 
@@ -210,6 +252,7 @@ void init()
     glEnable(GL_DEPTH_TEST);
     programColor = shaderLoader.CreateProgram("shaders/shader_color.vert", "shaders/shader_color.frag");
     programTexture = shaderLoader.CreateProgram("shaders/shader_tex.vert", "shaders/shader_tex.frag");
+    programSkybox = shaderLoader.CreateProgram("shaders/shader_skybox.vert", "shaders/shader_skybox.frag");
 
     initRenderables();
     initPhysicsScene();

@@ -16,6 +16,8 @@ Core::Shader_Loader shaderLoader;
 GLuint programColor;
 GLuint programTexture;
 GLuint programSkybox;
+GLuint programBlur;
+GLuint programFinal;
 
 obj::Model planeModel, shipModel, skyboxModel, boxModel;
 Core::RenderContext planeContext, shipContext, boxContext, skyboxContext;
@@ -312,7 +314,7 @@ void drawObjectTexture(GLuint program, Core::RenderContext* context, glm::mat4 m
 
 void renderSkybox(glm::vec3 userPos) {
 
-    int sc = 70;
+    int sc = 50;
     glm::mat4 matrix = glm::translate(glm::vec3(userPos.x, userPos.y-sc, userPos.z));
     glm::mat4 scale = glm::scale(glm::vec3(sc, sc, sc));
     drawObjectTexture(programSkybox, &skyboxContext, matrix*glm::translate(glm::vec3(0,sc, sc)) * glm::rotate(glm::radians(90.0f), glm::vec3(1, 0, 0)) * scale, skyboxTexture[0]); //back
@@ -338,13 +340,16 @@ void renderScene()
     }
 
     cameraMatrix = createCameraMatrix();
-    perspectiveMatrix = Core::createPerspectiveMatrix(0.1f, 200.f);
+    perspectiveMatrix = Core::createPerspectiveMatrix(0.1f, 100.f);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
+
     glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    renderSkybox(cameraPos);
 
     updateTransforms();
 
@@ -384,9 +389,7 @@ void renderScene()
     glUniform1f(glGetUniformLocation(programFinal, "exposure"), exposure);
     renderQuad();
 
-    glDepthMask(GL_FALSE);
-    renderSkybox(cameraPos);
-    glDepthMask(GL_TRUE);
+    
 
     glutSwapBuffers();
 }
@@ -467,7 +470,7 @@ int main(int argc, char ** argv)
 {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
-    glutInitWindowPosition(200, 200);
+    glutInitWindowPosition(0, 0);
     glutInitWindowSize(600, 600);
     glutCreateWindow("Space Simulator");
     glewInit();

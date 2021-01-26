@@ -19,7 +19,7 @@ GLuint programTexture;
 
 obj::Model planeModel, shipModel, sphereModel, deathStar;
 Core::RenderContext planeContext, shipContext, sphereContext, deathStarContext;
-GLuint groundTexture, moonTexture;
+GLuint groundTexture, moonTexture, sunTexture, mercuryTexture,venusTexture,hothTexture,saturnTexture,neptuneTexture;
 
 glm::vec3 cameraPos = glm::vec3(0, 0, 600);
 glm::vec3 cameraDir;
@@ -61,111 +61,154 @@ void drawObjectTexture(Core::RenderContext* context, glm::mat4 modelMatrix, GLui
     glUseProgram(0);
 }
 
-
-class Planet {
+class Moon {
 public:
-    GLuint texture;
-    std::string name;
-    Core::RenderContext* context;
-    glm::mat4 modelMatrix;
+    GLuint texture = moonTexture;
+    Core::RenderContext* context = &sphereContext;
+    glm::mat4 modelMatrix = glm::mat4(0.0f);
     float rotationVelocity = 0;
     glm::vec3 rotationAxis;
-    
+    glm::vec3 distance;
 
-    void render(glm::mat4 rotator = glm::mat4(1.0f)) {
-        drawObjectTexture(context, rotator * modelMatrix * rotator, texture);
+    void init(float v, glm::vec3 a,glm::vec3 d) {
+        rotationVelocity = v;
+        rotationAxis = a;
+        distance = d;  
+    }
+    void render() {
+        drawObjectTexture(context, modelMatrix, texture);
     }
     glm::mat4 createRotator(float rotateTime) {
         glm::mat4 rotator;
         rotator = glm::rotate(rotator, (rotateTime / 2.f) * rotationVelocity * 3.14159f, rotationAxis);
         return rotator;
     }
-    void createMoon(glm::vec3 distanceFromParent,glm::mat4 parentRotator,float rotateTime, glm::vec3 moonRotationAxis,float moonRotationVelocity) {
-        glm::mat4 moonRotator;
-        moonRotator = glm::rotate(moonRotator, (rotateTime / 2.f) * moonRotationVelocity * 3.14159f, moonRotationAxis);
-        drawObjectTexture(&sphereContext, (parentRotator * modelMatrix) * moonRotator * glm::translate(distanceFromParent) * glm::scale(glm::vec3(0.3f)), texture);
+};
+
+
+class Planet {
+public:
+    GLuint texture;
+    std::string name;
+    Core::RenderContext* context = &sphereContext;
+    glm::mat4 modelMatrix = glm::mat4(0.0f);
+    float rotationVelocity = 0;
+    glm::vec3 rotationAxis;
+    std::vector<Moon*> children;
+    
+    void init(GLuint t, std::string n, float v, glm::vec3 a) {
+        texture = t;
+        name = n;
+        rotationVelocity = v;
+        rotationAxis = a;
+    }
+    void render() {
+        drawObjectTexture(context, modelMatrix, texture);
+    }
+    glm::mat4 createRotator(float rotateTime) {
+        glm::mat4 rotator;
+        rotator = glm::rotate(rotator, (rotateTime / 2.f) * rotationVelocity * 3.14159f, rotationAxis);
+        return rotator;
     }
 
 };
 
 std::vector<Planet*> planets;
+std::vector<Moon*> moons;
 
 void initRenderables()
 {
 
     shipModel = obj::loadModelFromFile("models/spaceship.obj");
     shipContext.initFromOBJ(shipModel);
-
     sphereModel = obj::loadModelFromFile("models/sphere.obj");
     sphereContext.initFromOBJ(sphereModel);
-
     deathStar = obj::loadModelFromFile("models/0.obj");
     deathStarContext.initFromOBJ(deathStar);
 
     moonTexture = Core::LoadTexture("textures/moon.jpg");
-
-
     groundTexture = Core::LoadTexture("textures/sand.jpg");
+    sunTexture = Core::LoadTexture("textures/2k_sun.jpg");
+    mercuryTexture = Core::LoadTexture("textures/2k_mercury.jpg");
+    venusTexture = Core::LoadTexture("textures/2k_venus_surface.jpg");
+    neptuneTexture = Core::LoadTexture("textures/2k_neptune.jpg");
+    hothTexture = Core::LoadTexture("textures/hoth.jpg");
+    saturnTexture = Core::LoadTexture("textures/2k_saturn.jpg");
 
 
    
-
     Planet* sun = new Planet();
-    sun->name = "sun";
-    sun->context = &sphereContext;
-    sun->texture = Core::LoadTexture("textures/2k_sun.jpg");
-    sun->modelMatrix = glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, 0.0f)) * glm::scale(glm::vec3(30));
+    sun->init(sunTexture, "sun", 0, glm::vec3(0, 0, 0));
     planets.emplace_back(sun);
 
+
+    //MERCURY
     Planet* mercury = new Planet();
-    mercury->name = "mercury";
-    mercury->context = &sphereContext;
-    mercury->texture = Core::LoadTexture("textures/2k_mercury.jpg");
-    mercury->modelMatrix = glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -65.0f)) * glm::scale(glm::vec3(5));
-    mercury->rotationVelocity = 0.4f;
-    mercury->rotationAxis = glm::vec3(1.0, 1.0, 0.0);
+    mercury->init(mercuryTexture, "mercury", 0.4f, glm::vec3(1.0, 1.0, 0));
     planets.emplace_back(mercury);
 
+    Moon* mercury1 = new Moon();
+    mercury1->init(2.0f, glm::vec3(1, 1, 0), glm::vec3(0, 0, 2.0f));
+    mercury->children.emplace_back(mercury1);
+    moons.emplace_back(mercury1);
 
 
+    //VENUS
     Planet* venus = new Planet();
-    venus->name = "venus";
-    venus->context = &sphereContext;
-    venus->texture = Core::LoadTexture("textures/2k_venus_surface.jpg");
-    venus->modelMatrix = glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -100.0f)) * glm::scale(glm::vec3(15));
-    venus->rotationVelocity = 0.2f;
-    venus->rotationAxis = glm::vec3(-1.0, 1.0, 0.0);
-   
+    venus->init(venusTexture, "venus", 0.2f, glm::vec3(-1.0, 1.0, 0.0));
     planets.emplace_back(venus);
 
+    Moon* venus1 = new Moon();
+    Moon* venus2 = new Moon();
+    venus1->init(2.0f, glm::vec3(-1.0, 1.0, 0.0), glm::vec3(0, 0, 2.0f));
+    venus2->init(1.5f, glm::vec3(-1.0, 1.0, 0.0), glm::vec3(0, 0, 2.5f));
+    venus->children.emplace_back(venus1);
+    venus->children.emplace_back(venus2);
+    moons.emplace_back(venus1);
+    moons.emplace_back(venus2);
+
+    //NEPTUNE
     Planet* neptune = new Planet();
-    neptune->name = "neptune";
-    neptune->context = &sphereContext;
-    neptune->texture = Core::LoadTexture("textures/2k_neptune.jpg");
-    neptune->modelMatrix = glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -140.0f)) * glm::scale(glm::vec3(25));
-    neptune->rotationVelocity = 0.3f;
-    neptune->rotationAxis = glm::vec3(0.0, 1.0, 0.0);
-    
+    neptune->init(neptuneTexture, "neptune", 0.3f, glm::vec3(0.0, 1.0, 0.0));
     planets.emplace_back(neptune);
 
+    Moon* neptune1 = new Moon();
+    Moon* neptune2 = new Moon();
+    Moon* neptune3 = new Moon();
+
+    neptune1->init(0.5f, glm::vec3(0.0, 1.0, 0.0), glm::vec3(0, 0, 1.5f));
+    neptune2->init(1.2f, glm::vec3(1.0, 0.0, 0.0), glm::vec3(0, 0, 2));
+    neptune3->init(1.5f, glm::vec3(1.0, 1.0, 0.0), glm::vec3(0, 0, 2.5f));
+
+    neptune->children.emplace_back(neptune1);
+    neptune->children.emplace_back(neptune2);
+    neptune->children.emplace_back(neptune3);
+
+
+    moons.emplace_back(neptune1);
+    moons.emplace_back(neptune2);
+    moons.emplace_back(neptune3);
+
+    //HOTH
     Planet* hoth = new Planet();
-    hoth->name = "hoth";
-    hoth->context = &sphereContext;
-    hoth->texture = Core::LoadTexture("textures/hoth.jpg");
-    hoth->modelMatrix = glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -220.0f)) * glm::scale(glm::vec3(28));
-    hoth->rotationVelocity = 0.5f;
-    hoth->rotationAxis = glm::vec3(1.0, 1.0, 0.0);
-   
+    hoth->init(hothTexture, "hoth", 0.5f, glm::vec3(1.0, 1.0, 0.0));
     planets.emplace_back(hoth);
 
+    Moon* hoth1 = new Moon();
+    Moon* hoth2 = new Moon();
+
+    hoth1->init(1.5f, glm::vec3(0.0, 1.0, 0.0), glm::vec3(0, 0, 1.5f));
+    hoth2->init(1.7f, glm::vec3(0.0, 1.0, 0.0), glm::vec3(0, 0, 2.0f));
+
+    hoth->children.emplace_back(hoth1);
+    hoth->children.emplace_back(hoth2);
+
+    moons.emplace_back(hoth1);
+    moons.emplace_back(hoth2);
+
+    //SATURN
     Planet* saturn = new Planet();
-    saturn->name = "saturn";
-    saturn->context = &sphereContext;
-    saturn->texture = Core::LoadTexture("textures/2k_saturn.jpg");
-    saturn->modelMatrix = glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -300.0f)) * glm::scale(glm::vec3(35));
-    saturn->rotationVelocity = 0.4f;
-    saturn->rotationAxis = glm::vec3(0.0, -1.0, 0.0);
-    
+    saturn->init(saturnTexture, "saturn", 0.4f, glm::vec3(0.0, -1.0, 0.0));
     planets.emplace_back(saturn);
 
 
@@ -299,52 +342,62 @@ void renderScene()
 
 
     for (Planet* planet : planets) {
+        glm::mat4 childRotator;
         glm::mat4 rotator = planet->createRotator(rotateTime);
-        if (bool(planet->rotationVelocity)) {
-            planet->render(rotator);
-            if (planet->name == "mercury") {
-                glm::mat4 moonrotator;
-                moonrotator = glm::rotate(moonrotator, (rotateTime / 2.f) * planet->rotationVelocity * 2.5f * 3.14159f, glm::vec3(1, 1, 0));
-                drawObjectTexture(&sphereContext, (rotator * planet->modelMatrix) * moonrotator * glm::translate(glm::vec3(0, 0, 2.0f)) * glm::scale(glm::vec3(0.5f)), moonTexture);
-            }
-            else if (planet->name == "venus") {
-                glm::mat4 moonrotator;
-                moonrotator = glm::rotate(moonrotator, (rotateTime / 2.f) * planet->rotationVelocity * 2.5f * 3.14159f, glm::vec3(0, 1, 0));
-                drawObjectTexture(&sphereContext, (rotator * planet->modelMatrix) * moonrotator * glm::translate(glm::vec3(0, 0, 1.3)) * glm::scale(glm::vec3(0.2f)), moonTexture);
-                moonrotator = glm::rotate(moonrotator, (rotateTime / 2.f) * planet->rotationVelocity * 1.5f * 3.14159f, glm::vec3(1, 1, 0));
-                drawObjectTexture(&sphereContext, (rotator * planet->modelMatrix) * moonrotator * glm::translate(glm::vec3(0, 0, 1.8f)) * glm::scale(glm::vec3(0.3f)), moonTexture);
-
-            }
-            else if (planet->name == "neptune") {
-                glm::mat4 moonrotator;
-                moonrotator = glm::rotate(moonrotator, (rotateTime / 2.f) * planet->rotationVelocity * 0.5f * 3.14159f, glm::vec3(0, 1, 0));
-                drawObjectTexture(&sphereContext, (rotator * planet->modelMatrix) * moonrotator * glm::translate(glm::vec3(0, 0, 1.5f)) * glm::scale(glm::vec3(0.1f)), moonTexture);
-                moonrotator = glm::rotate(moonrotator, (rotateTime / 2.f) * planet->rotationVelocity * 1.2f * 3.14159f, glm::vec3(1, 0, 0));
-                drawObjectTexture(&sphereContext, (rotator * planet->modelMatrix) * moonrotator * glm::translate(glm::vec3(0, 0, 2)) * glm::scale(glm::vec3(0.2f)), moonTexture);
-                moonrotator = glm::rotate(moonrotator, (rotateTime / 2.f) * planet->rotationVelocity * 1.5f * 3.14159f, glm::vec3(1, 1, 0));
-                drawObjectTexture(&sphereContext, (rotator * planet->modelMatrix) * moonrotator * glm::translate(glm::vec3(0, 0, 2.2f)) * glm::scale(glm::vec3(0.3f)), moonTexture);
-
-            }
-            else if (planet->name == "hoth") {
-                glm::mat4 moonrotator;
-                moonrotator = glm::rotate(moonrotator, (rotateTime / 2.f) * planet->rotationVelocity * 1.5f * 3.14159f, glm::vec3(0, 1, 0));
-                drawObjectTexture(&sphereContext, (rotator * planet->modelMatrix) * moonrotator * glm::translate(glm::vec3(0, 0, 1.2f)) * glm::scale(glm::vec3(0.1f)), moonTexture);
-                moonrotator = glm::rotate(moonrotator, (rotateTime / 2.f) * planet->rotationVelocity * 1.7f * 3.14159f, glm::vec3(1, 0, 0));
-                drawObjectTexture(&sphereContext, (rotator * planet->modelMatrix) * moonrotator * glm::translate(glm::vec3(0, 0, 1.5f)) * glm::scale(glm::vec3(0.2f)), moonTexture);
-                moonrotator = glm::rotate(moonrotator, (rotateTime / 2.f) * planet->rotationVelocity * 1.9f * 3.14159f, glm::vec3(1, 1, 0));
-                drawObjectTexture(&sphereContext, (rotator * planet->modelMatrix) * moonrotator * glm::translate(glm::vec3(0, 0, 2.0f)) * glm::scale(glm::vec3(0.3f)), moonTexture);
-            }
-            else if (planet->name == "saturn") {
-                glm::mat4 moonrotator;
-                moonrotator = glm::rotate(moonrotator, (rotateTime / 2.f) * planet->rotationVelocity * 1.25f * 3.14159f, glm::vec3(1, 1, 0));
-                drawObjectTexture(&sphereContext, (rotator * planet->modelMatrix) * moonrotator * glm::translate(glm::vec3(0, 0, 2.0f)) * glm::scale(glm::vec3(0.2f)), moonTexture);
-            }
-
-        }
-        else {
+        if (planet->name == "sun") {
+            planet->modelMatrix = glm::translate(glm::mat4(1.0f),glm::vec3(0,0,0))* glm::scale(glm::vec3(30));
             planet->render();
-        };
+        }
+        else if(planet->name == "mercury"){
+            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0f),glm::vec3(0.0f, 0.0f, -65.0f)) * glm::scale(glm::vec3(5));
+            planet->render();
+            for (Moon* child : planet->children) {
+                childRotator = child->createRotator(rotateTime);
+                child->modelMatrix = planet->modelMatrix *childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.5f));
+                child->render();  
+            }
+        }
+        else if (planet->name == "venus") {
+            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -100.0f)) * glm::scale(glm::vec3(15));
+            planet->render();
+            for (Moon* child : planet->children) {
+                childRotator = child->createRotator(rotateTime);
+                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.5f));
+                child->render();
+            }
+        }
+        else if (planet->name == "neptune") {
+            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -140.0f)) * glm::scale(glm::vec3(25));
+            planet->render();
+            for (Moon* child : planet->children) {
+                childRotator = child->createRotator(rotateTime);
+                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.5f));
+                child->render();
+            }
+        }
+        else if (planet->name == "hoth") {
+            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -220.0f)) * glm::scale(glm::vec3(28));
+            planet->render();
+            for (Moon* child : planet->children) {
+                childRotator = child->createRotator(rotateTime);
+                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.5f));
+                child->render();
+            }
+        }
+        else if (planet->name == "saturn") {
+            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -300.0f)) * glm::scale(glm::vec3(35));
+            planet->render();
+            for (Moon* child : planet->children) {
+                childRotator = child->createRotator(rotateTime);
+                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.5f));
+                child->render();
+            }
+        }
     };
+
+
+
+
 
 
     glm::mat4 shipMatrix = glm::translate(cameraPos + cameraDir * 0.5f) * glm::mat4_cast(glm::inverse(rotation)) * glm::translate(glm::vec3(0, -0.1f, 0)) * glm::rotate(glm::radians(180.0f), glm::vec3(0, 1, 0)) * glm::scale(glm::vec3(0.20f));

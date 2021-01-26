@@ -19,6 +19,7 @@ GLuint programTexture;
 GLuint programSkybox;
 GLuint programBlur;
 GLuint programFinal;
+GLuint programTexBloom;
 
 obj::Model planeModel, shipModel, skyboxModel, boxModel, sphereModel, deathStar;
 Core::RenderContext planeContext, shipContext, boxContext, skyboxContext, sphereContext, deathStarContext;
@@ -26,9 +27,11 @@ GLuint groundTexture, metalTexture, moonTexture, sunTexture, mercuryTexture, ven
 GLuint skyboxTexture[6];
 
 glm::vec3 cameraDir;
+glm::vec3 cameraPos = glm::vec3(0, 0, 600);
 glm::vec3 cameraSide;
 float cameraAngle = 0;
 glm::mat4 cameraMatrix, perspectiveMatrix;
+
 
 glm::quat rotation = glm::quat(1, 0, 0, 0);
 
@@ -91,10 +94,29 @@ struct Renderable {
     Core::RenderContext* context;
     glm::mat4 modelMatrix;
     GLuint textureId;
+};
 
 void drawObjectTexture(Core::RenderContext* context, glm::mat4 modelMatrix, GLuint textureId)
 {
     GLuint program = programTexture;
+
+    glUseProgram(program);
+
+    glUniform3f(glGetUniformLocation(program, "lightDir"), lightDir.x, lightDir.y, lightDir.z);
+    Core::SetActiveTexture(textureId, "textureSampler", program, 0);
+
+    glm::mat4 transformation = perspectiveMatrix * cameraMatrix * modelMatrix;
+    glUniformMatrix4fv(glGetUniformLocation(program, "modelViewProjectionMatrix"), 1, GL_FALSE, (float*)&transformation);
+    glUniformMatrix4fv(glGetUniformLocation(program, "modelMatrix"), 1, GL_FALSE, (float*)&modelMatrix);
+
+    Core::DrawContext(*context);
+
+    glUseProgram(0);
+}
+
+
+
+void drawObjectTexture(GLuint program, Core::RenderContext* context, glm::mat4 modelMatrix, GLuint textureId) {
 
     glUseProgram(program);
 
@@ -153,6 +175,9 @@ public:
     }
     void render() {
         drawObjectTexture(context, modelMatrix, texture);
+    }
+    void renderBloom() {
+        drawObjectTexture(programTexBloom, context, modelMatrix, texture);
     }
     glm::mat4 createRotator(float rotateTime) {
         glm::mat4 rotator;
@@ -435,43 +460,9 @@ void drawCube(glm::mat4 modelMatrix)
     glUseProgram(0);
 }
 
-void drawObjectTexture(Core::RenderContext * context, glm::mat4 modelMatrix, GLuint textureId)
-{
-    GLuint program = programTexture;
-
-    glUseProgram(program);
-
-    glUniform3f(glGetUniformLocation(program, "lightDir"), lightDir.x, lightDir.y, lightDir.z);
-    Core::SetActiveTexture(textureId, "textureSampler", program, 0);
-
-    glm::mat4 transformation = perspectiveMatrix * cameraMatrix * modelMatrix;
-    glUniformMatrix4fv(glGetUniformLocation(program, "modelViewProjectionMatrix"), 1, GL_FALSE, (float*)&transformation);
-    glUniformMatrix4fv(glGetUniformLocation(program, "modelMatrix"), 1, GL_FALSE, (float*)&modelMatrix);
-
-    Core::DrawContext(*context);
-
-    glUseProgram(0);
-}
-
-void drawObjectTexture(GLuint program, Core::RenderContext* context, glm::mat4 modelMatrix, GLuint textureId) {
-
-    glUseProgram(program);
-
-    glUniform3f(glGetUniformLocation(program, "lightDir"), lightDir.x, lightDir.y, lightDir.z);
-    Core::SetActiveTexture(textureId, "textureSampler", program, 0);
-
-    glm::mat4 transformation = perspectiveMatrix * cameraMatrix * modelMatrix;
-    glUniformMatrix4fv(glGetUniformLocation(program, "modelViewProjectionMatrix"), 1, GL_FALSE, (float*)&transformation);
-    glUniformMatrix4fv(glGetUniformLocation(program, "modelMatrix"), 1, GL_FALSE, (float*)&modelMatrix);
-
-    Core::DrawContext(*context);
-
-    glUseProgram(0);
-}
-
 void renderSkybox(glm::vec3 userPos) {
 
-    int sc = 50;
+    int sc = 1200;
     glm::mat4 matrix = glm::translate(glm::vec3(userPos.x, userPos.y-sc, userPos.z));
     glm::mat4 scale = glm::scale(glm::vec3(sc, sc, sc));
     drawObjectTexture(programSkybox, &skyboxContext, matrix*glm::translate(glm::vec3(0,sc, sc)) * glm::rotate(glm::radians(90.0f), glm::vec3(1, 0, 0)) * scale, skyboxTexture[0]); //back
@@ -503,7 +494,7 @@ void renderScene()
 
 
     cameraMatrix = createCameraMatrix();
-    perspectiveMatrix = Core::createPerspectiveMatrix(1.f, 100.f);
+    perspectiveMatrix = Core::createPerspectiveMatrix(1.f, 3000.f);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -521,7 +512,7 @@ void renderScene()
         glm::mat4 rotator = planet->createRotator(rotateTime);
         if (planet->name == "sun") {
             planet->modelMatrix = glm::translate(glm::mat4(1.0f),glm::vec3(0,0,0))* glm::scale(glm::vec3(30));
-            planet->render();
+            planet->renderBloom();
         }
         else if(planet->name == "mercury"){
             planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0f),glm::vec3(0.0f, 0.0f, -65.0f)) * glm::scale(glm::vec3(5));
@@ -579,7 +570,7 @@ void renderScene()
 
     drawObjectTexture(&shipContext, shipMatrix, groundTexture);
 
-    drawCube(glm::translate(glm::vec3(0, 0, 0)));
+    drawCube(glm::translate(glm::vec3(30, 10, 30)));
 
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -619,6 +610,7 @@ void init()
     glEnable(GL_DEPTH_TEST);
     programColor = shaderLoader.CreateProgram("shaders/shader_color.vert", "shaders/shader_color.frag");
     programTexture = shaderLoader.CreateProgram("shaders/shader_tex.vert", "shaders/shader_tex.frag");
+    programTexBloom = shaderLoader.CreateProgram("shaders/shader_tex_bloom.vert", "shaders/shader_tex_bloom.frag");
     programBlur = shaderLoader.CreateProgram("shaders/gaussian.vert", "shaders/gaussian.frag");
     programFinal = shaderLoader.CreateProgram("shaders/final.vert", "shaders/final.frag");
     programSkybox = shaderLoader.CreateProgram("shaders/shader_skybox.vert", "shaders/shader_skybox.frag");

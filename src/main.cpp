@@ -13,6 +13,8 @@
 #include "Texture.h"
 #include "Physics.h"
 
+float appLoadingTime;
+
 Core::Shader_Loader shaderLoader;
 GLuint programColor;
 GLuint programTexture;
@@ -20,6 +22,16 @@ GLuint programSkybox;
 GLuint programBlur;
 GLuint programFinal;
 GLuint programTexBloom;
+GLuint programTexBloomSun;
+
+
+struct Renderable {
+    Core::RenderContext* context;
+    glm::mat4 modelMatrix;
+    GLuint textureId;
+};
+std::vector<Renderable*> renderables;
+std::vector<glm::vec3> lights;
 
 obj::Model planeModel, shipModel, skyboxModel, boxModel, sphereModel, deathStar;
 Core::RenderContext planeContext, shipContext, boxContext, skyboxContext, sphereContext, deathStarContext;
@@ -27,10 +39,10 @@ GLuint groundTexture, metalTexture, moonTexture, sunTexture, mercuryTexture, ven
 GLuint skyboxTexture[6];
 
 glm::vec3 cameraDir;
-glm::vec3 cameraPos = glm::vec3(0, 0, 600);
+glm::vec3 cameraPos = glm::vec3(60, 0, 0);
 glm::vec3 cameraSide;
-float cameraAngle = 0;
-glm::mat4 cameraMatrix, perspectiveMatrix;
+float cameraAngle = glm::radians(270.f);
+glm::mat4 cameraMatrix, perspectiveMatrix, shipModelMatrix;
 
 
 glm::quat rotation = glm::quat(1, 0, 0, 0);
@@ -48,8 +60,8 @@ Physics pxScene(9.8 /* gravity (m/s^2) */);
 const double physicsStepTime = 1.f / 60.f;
 double physicsTimeToProcess = 0;
 
-PxRigidStatic* planeBody, * shipBody = nullptr;
-PxMaterial* planeMaterial, * shipMaterial = nullptr;
+PxRigidDynamic* shipBody = nullptr;
+PxMaterial* shipMaterial = nullptr;
 
 int SCR_WIDTH = 600;
 int SCR_HEIGHT = 600;
@@ -90,19 +102,12 @@ void renderQuad()
     glBindVertexArray(0);
 }
 
-struct Renderable {
-    Core::RenderContext* context;
-    glm::mat4 modelMatrix;
-    GLuint textureId;
-};
-
 void drawObjectTexture(Core::RenderContext* context, glm::mat4 modelMatrix, GLuint textureId)
 {
     GLuint program = programTexture;
 
     glUseProgram(program);
-
-    glUniform3f(glGetUniformLocation(program, "lightDir"), lightDir.x, lightDir.y, lightDir.z);
+    glUniform3f(glGetUniformLocation(program, "lightPosCube"), 60, 10, 60);
     Core::SetActiveTexture(textureId, "textureSampler", program, 0);
 
     glm::mat4 transformation = perspectiveMatrix * cameraMatrix * modelMatrix;
@@ -141,10 +146,10 @@ public:
     glm::vec3 rotationAxis;
     glm::vec3 distance;
 
-    void init(float v, glm::vec3 a,glm::vec3 d) {
+    void init(float v, glm::vec3 a, glm::vec3 d) {
         rotationVelocity = v;
         rotationAxis = a;
-        distance = d;  
+        distance = d;
     }
     void render() {
         drawObjectTexture(context, modelMatrix, texture);
@@ -166,7 +171,7 @@ public:
     float rotationVelocity = 0;
     glm::vec3 rotationAxis;
     std::vector<Moon*> children;
-    
+
     void init(GLuint t, std::string n, float v, glm::vec3 a) {
         texture = t;
         name = n;
@@ -179,6 +184,9 @@ public:
     void renderBloom() {
         drawObjectTexture(programTexBloom, context, modelMatrix, texture);
     }
+    void renderSun() {
+        drawObjectTexture(programTexBloomSun, context, modelMatrix, texture);
+    }
     glm::mat4 createRotator(float rotateTime) {
         glm::mat4 rotator;
         rotator = glm::rotate(rotator, (rotateTime / 2.f) * rotationVelocity * 3.14159f, rotationAxis);
@@ -189,7 +197,6 @@ public:
 
 std::vector<Planet*> planets;
 std::vector<Moon*> moons;
-
 void initRenderables()
 {
     shipModel = obj::loadModelFromFile("models/spaceship.obj");
@@ -222,6 +229,12 @@ void initRenderables()
     skyboxTexture[4] = Core::LoadTextureSkybox("textures/right.png");
     skyboxTexture[5] = Core::LoadTextureSkybox("textures/top.png");
 
+    Renderable* ship = new Renderable();
+    ship->context = &shipContext;
+    ship->textureId = groundTexture;
+    ship->modelMatrix = glm::rotate(glm::radians(90.f), glm::vec3(0.f, 1.f, 0.f));
+    renderables.emplace_back(ship);
+
     Planet* sun = new Planet();
     sun->init(sunTexture, "sun", 0, glm::vec3(0, 0, 0));
     planets.emplace_back(sun);
@@ -229,24 +242,24 @@ void initRenderables()
 
     //MERCURY
     Planet* mercury = new Planet();
-    mercury->init(mercuryTexture, "mercury", 0.2f, glm::vec3(0.0, -1.0, 0.0));
+    mercury->init(mercuryTexture, "mercury", 0.4f, glm::vec3(1.0, 1.0, 0));
     planets.emplace_back(mercury);
 
     Moon* mercury1 = new Moon();
-    mercury1->init(0.5f, glm::vec3(1, 1, 0), glm::vec3(0, 0, 2.0f));
+    mercury1->init(2.0f, glm::vec3(1, 1, 0), glm::vec3(0, 0, 2.0f));
     mercury->children.emplace_back(mercury1);
     moons.emplace_back(mercury1);
 
 
     //VENUS
     Planet* venus = new Planet();
-    venus->init(venusTexture, "venus", 0.1f, glm::vec3(0.0, -1.0, 0.0));
+    venus->init(venusTexture, "venus", 0.2f, glm::vec3(-1.0, 1.0, 0.0));
     planets.emplace_back(venus);
 
     Moon* venus1 = new Moon();
     Moon* venus2 = new Moon();
-    venus1->init(0.5f, glm::vec3(-1.0, 1.0, 0.0), glm::vec3(0, 0, 2.0f));
-    venus2->init(0.25f, glm::vec3(-1.0, 0.0, 0.0), glm::vec3(0, 0, 2.5f));
+    venus1->init(2.0f, glm::vec3(-1.0, 1.0, 0.0), glm::vec3(0, 0, 2.0f));
+    venus2->init(1.5f, glm::vec3(-1.0, 1.0, 0.0), glm::vec3(0, 0, 2.5f));
     venus->children.emplace_back(venus1);
     venus->children.emplace_back(venus2);
     moons.emplace_back(venus1);
@@ -254,16 +267,16 @@ void initRenderables()
 
     //NEPTUNE
     Planet* neptune = new Planet();
-    neptune->init(neptuneTexture, "neptune", 0.15f, glm::vec3(0.0, -1.0, 0.0));
+    neptune->init(neptuneTexture, "neptune", 0.3f, glm::vec3(0.0, 1.0, 0.0));
     planets.emplace_back(neptune);
 
     Moon* neptune1 = new Moon();
     Moon* neptune2 = new Moon();
     Moon* neptune3 = new Moon();
 
-    neptune1->init(0.5f, glm::vec3(0.0, 1.0, -1.0), glm::vec3(0, 0, 1.5f));
+    neptune1->init(0.5f, glm::vec3(0.0, 1.0, 0.0), glm::vec3(0, 0, 1.5f));
     neptune2->init(1.2f, glm::vec3(1.0, 0.0, 0.0), glm::vec3(0, 0, 2));
-    neptune3->init(1.5f, glm::vec3(1.0, -1.0, 0.0), glm::vec3(0, 0, 2.5f));
+    neptune3->init(1.5f, glm::vec3(1.0, 1.0, 0.0), glm::vec3(0, 0, 2.5f));
 
     neptune->children.emplace_back(neptune1);
     neptune->children.emplace_back(neptune2);
@@ -276,14 +289,14 @@ void initRenderables()
 
     //HOTH
     Planet* hoth = new Planet();
-    hoth->init(hothTexture, "hoth", 0.25f, glm::vec3(0.0, -1.0, 0.0));
+    hoth->init(hothTexture, "hoth", 0.5f, glm::vec3(1.0, 1.0, 0.0));
     planets.emplace_back(hoth);
 
     Moon* hoth1 = new Moon();
     Moon* hoth2 = new Moon();
 
-    hoth1->init(0.3f, glm::vec3(0.0, 1.0, 0.0), glm::vec3(0, 0, 1.5f));
-    hoth2->init(0.4f, glm::vec3(1.0, 0.0, 0.0), glm::vec3(0, 0, 2.0f));
+    hoth1->init(1.5f, glm::vec3(0.0, 1.0, 0.0), glm::vec3(0, 0, 1.5f));
+    hoth2->init(1.7f, glm::vec3(0.0, 1.0, 0.0), glm::vec3(0, 0, 2.0f));
 
     hoth->children.emplace_back(hoth1);
     hoth->children.emplace_back(hoth2);
@@ -293,18 +306,28 @@ void initRenderables()
 
     //SATURN
     Planet* saturn = new Planet();
-    saturn->init(saturnTexture, "saturn", 0.2f, glm::vec3(0.0, -1.0, 0.0));
+    saturn->init(saturnTexture, "saturn", 0.4f, glm::vec3(0.0, -1.0, 0.0));
     planets.emplace_back(saturn);
 
+    lights.emplace_back(glm::vec3(0, 0, 0));
 }
 
 void initPhysicsScene()
 {
+    shipBody = pxScene.physics->createRigidDynamic(PxTransform(80, 10, 0));
+    shipMaterial = pxScene.physics->createMaterial(0.5, 0.5, 0.6);
+    PxShape* shipShape = pxScene.physics->createShape(PxBoxGeometry(7, 5, 2.3f), *shipMaterial);
+    shipBody->attachShape(*shipShape);
+    shipShape->release();
+    shipBody->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, true);
+    shipBody->userData = renderables[0];
+    pxScene.scene->addActor(*shipBody);
 
 }
 
 void updateTransforms()
 {
+    // Here we retrieve the current transforms of the objects from the physical simulation.
     auto actorFlags = PxActorTypeFlag::eRIGID_DYNAMIC | PxActorTypeFlag::eRIGID_STATIC;
     PxU32 nbActors = pxScene.scene->getNbActors(actorFlags);
     if (nbActors)
@@ -313,16 +336,20 @@ void updateTransforms()
         pxScene.scene->getActors(actorFlags, (PxActor**)&actors[0], nbActors);
         for (auto actor : actors)
         {
+            // We use the userData of the objects to set up the model matrices
+            // of proper renderables.
             if (!actor->userData) continue;
-            Planet* planet = (Planet*)actor->userData;
+            Renderable* renderable = (Renderable*)actor->userData;
 
+            // get world matrix of the object (actor)
             PxMat44 transform = actor->getGlobalPose();
             auto& c0 = transform.column0;
             auto& c1 = transform.column1;
             auto& c2 = transform.column2;
             auto& c3 = transform.column3;
 
-            planet->modelMatrix = glm::mat4(
+            // set up the model matrix used for the rendering
+            renderable->modelMatrix = glm::mat4(
                 c0.x, c0.y, c0.z, c0.w,
                 c1.x, c1.y, c1.z, c1.w,
                 c2.x, c2.y, c2.z, c2.w,
@@ -339,10 +366,11 @@ void keyboard(unsigned char key, int x, int y)
     {
     case 'z': cameraAngle -= angleSpeed; break;
     case 'x': cameraAngle += angleSpeed; break;
-    case 'w': cameraPos += cameraDir * moveSpeed; break;
-    case 's': cameraPos -= cameraDir * moveSpeed; break;
-    case 'd': cameraPos += cameraSide * moveSpeed; break;
-    case 'a': cameraPos -= cameraSide * moveSpeed; break;
+    case 'w': PxRigidBodyExt::addLocalForceAtLocalPos(*shipBody, PxVec3(10, 0, 0), PxVec3(0, 0, 0));  break;
+    case 's': PxRigidBodyExt::addLocalForceAtLocalPos(*shipBody, PxVec3(-10, 0, 0), PxVec3(0, 0, 0)); break;
+    case 'd': PxRigidBodyExt::addLocalForceAtLocalPos(*shipBody, PxVec3(0, 0, 1), PxVec3(1, 0, 0)); break;
+    case 'a': PxRigidBodyExt::addLocalForceAtLocalPos(*shipBody, PxVec3(0, 0, -1), PxVec3(1, 0, 0)); break;
+    case 'p': shipBody->setLinearVelocity(PxVec3(0, 0, 0)); shipBody->setAngularVelocity(PxVec3(0, 0, 0)); break;
     }
 }
 
@@ -356,10 +384,30 @@ void mouse(int x, int y)
 
 glm::mat4 createCameraMatrix()
 {
-    glm::quat x = glm::angleAxis(divX / 50.0f, glm::vec3(0, 1, 0));
-    glm::quat y = glm::angleAxis(divY / 50.0f, glm::vec3(1, 0, 0));
+    PxTransform pxtr = shipBody->getGlobalPose();
+    glm::quat pxtq = glm::quat(pxtr.q.w, pxtr.q.x, pxtr.q.y, pxtr.q.z);
+    glm::vec3 cameraDirMat = pxtq * glm::vec3(0, 0, -1);
+    glm::vec3 offset = cameraDirMat * 3.0f;
+    cameraPos = offset + glm::vec3(pxtr.p.x, pxtr.p.y, pxtr.p.z);
+
+
+    glUseProgram(programTexture);
+    glUniform3f(glGetUniformLocation(programTexture, "viewPos"), pxtr.p.x, pxtr.p.y + 3, pxtr.p.z + 8);
+    glUseProgram(0);
+
+    glm::vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
+    glm::vec3 cameraTarget = glm::vec3(pxtr.p.x, pxtr.p.y, pxtr.p.z);
+    glm::vec3 cameraDirection = glm::normalize(cameraPos - cameraTarget);
+
+    glm::mat4 returnowaTablica = glm::lookAt(cameraPos, cameraPos - cameraDirection, cameraUp);
+
+    return glm::translate(glm::vec3(0,-1, 0)) * returnowaTablica;
+    /*glm::quat x = glm::angleAxis(glm::radians(divX / 5.0f), glm::vec3(0, 1, 0));
+    glm::quat y = glm::angleAxis(glm::radians(divY / 5.0f), glm::vec3(1, 0, 0));
     glm::quat z = glm::angleAxis(cameraAngle, glm::vec3(0, 0, 1));
-    rotation = glm::normalize(x * y * z * rotation);
+    glm::quat xy = x * y * z;
+    rotation = glm::normalize(xy * rotation);
 
     divX = 0;
     divY = 0;
@@ -368,7 +416,7 @@ glm::mat4 createCameraMatrix()
     cameraDir = glm::inverse(rotation) * glm::vec3(0, 0, -1);
     cameraSide = glm::inverse(rotation) * glm::vec3(1, 0, 0);
 
-    return Core::createViewMatrixQuat(cameraPos, rotation);
+    return Core::createViewMatrixQuat(cameraPos, rotation);*/
 }
 
 void drawObjectColor(Core::RenderContext* context, glm::mat4 modelMatrix, glm::vec3 color)
@@ -391,7 +439,7 @@ void drawObjectColor(Core::RenderContext* context, glm::mat4 modelMatrix, glm::v
 
 void drawCube(glm::mat4 modelMatrix)
 {
-    glm::vec3 color = glm::vec3(1,0.843f,0);
+    glm::vec3 color = glm::vec3(1, 0.843f, 0);
     glUseProgram(programTexture);
 
     glUniform3f(glGetUniformLocation(programTexture, "lightDir"), lightDir.x, lightDir.y, lightDir.z);
@@ -463,14 +511,14 @@ void drawCube(glm::mat4 modelMatrix)
 void renderSkybox(glm::vec3 userPos) {
 
     int sc = 1200;
-    glm::mat4 matrix = glm::translate(glm::vec3(userPos.x, userPos.y-sc, userPos.z));
+    glm::mat4 matrix = glm::translate(glm::vec3(userPos.x, userPos.y - sc, userPos.z));
     glm::mat4 scale = glm::scale(glm::vec3(sc, sc, sc));
-    drawObjectTexture(programSkybox, &skyboxContext, matrix*glm::translate(glm::vec3(0,sc, sc)) * glm::rotate(glm::radians(90.0f), glm::vec3(1, 0, 0)) * scale, skyboxTexture[0]); //back
-    drawObjectTexture(programSkybox, &skyboxContext, matrix*glm::translate(glm::vec3(0,0,0)) * scale, skyboxTexture[1]); //bottom
-    drawObjectTexture(programSkybox, &skyboxContext, matrix*glm::translate(glm::vec3(0, sc, -sc)) * glm::rotate(glm::radians(90.0f), glm::vec3(1, 0, 0)) * scale, skyboxTexture[2]); //front
-    drawObjectTexture(programSkybox, &skyboxContext, matrix*glm::translate(glm::vec3(sc, sc, 0)) * glm::rotate(glm::radians(90.0f), glm::vec3(0, 0, 1)) * scale, skyboxTexture[4]); //right
-    drawObjectTexture(programSkybox, &skyboxContext, matrix*glm::translate(glm::vec3(-sc, sc, 0)) * glm::rotate(glm::radians(90.0f), glm::vec3(0, 0, 1)) * scale, skyboxTexture[3]); //left
-    drawObjectTexture(programSkybox, &skyboxContext, matrix*glm::translate(glm::vec3(0, 2*sc, 0)) * scale, skyboxTexture[5]); //top
+    drawObjectTexture(programSkybox, &skyboxContext, matrix * glm::translate(glm::vec3(0, sc, sc)) * glm::rotate(glm::radians(90.0f), glm::vec3(1, 0, 0)) * scale, skyboxTexture[0]); //back
+    drawObjectTexture(programSkybox, &skyboxContext, matrix * glm::translate(glm::vec3(0, 0, 0)) * scale, skyboxTexture[1]); //bottom
+    drawObjectTexture(programSkybox, &skyboxContext, matrix * glm::translate(glm::vec3(0, sc, -sc)) * glm::rotate(glm::radians(90.0f), glm::vec3(1, 0, 0)) * scale, skyboxTexture[2]); //front
+    drawObjectTexture(programSkybox, &skyboxContext, matrix * glm::translate(glm::vec3(sc, sc, 0)) * glm::rotate(glm::radians(90.0f), glm::vec3(0, 0, 1)) * scale, skyboxTexture[4]); //right
+    drawObjectTexture(programSkybox, &skyboxContext, matrix * glm::translate(glm::vec3(-sc, sc, 0)) * glm::rotate(glm::radians(90.0f), glm::vec3(0, 0, 1)) * scale, skyboxTexture[3]); //left
+    drawObjectTexture(programSkybox, &skyboxContext, matrix * glm::translate(glm::vec3(0, 2 * sc, 0)) * scale, skyboxTexture[5]); //top
 }
 void renderScene()
 {
@@ -489,8 +537,10 @@ void renderScene()
 
     float rotateTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
 
-
-
+    PxTransform pxtr = shipBody->getGlobalPose();
+    glUseProgram(programTexture);
+    glUniform3f(glGetUniformLocation(programTexture, "viewPos"), pxtr.p.x, pxtr.p.y + 3, pxtr.p.z + 8);
+    glUseProgram(0);
 
 
     cameraMatrix = createCameraMatrix();
@@ -511,66 +561,61 @@ void renderScene()
         glm::mat4 childRotator;
         glm::mat4 rotator = planet->createRotator(rotateTime);
         if (planet->name == "sun") {
-            planet->modelMatrix = glm::translate(glm::mat4(1.0f),glm::vec3(0,0,0))* glm::scale(glm::vec3(30));
-            planet->renderBloom();
+            planet->modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, 0)) * glm::scale(glm::vec3(30));
+            planet->renderSun();
         }
-        else if(planet->name == "mercury"){
-            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0f),glm::vec3(0.0f, 0.0f, -65.0f)) * glm::scale(glm::vec3(5));
+        else if (planet->name == "mercury") {
+            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -65.0f)) * glm::scale(glm::vec3(5));
             planet->render();
             for (Moon* child : planet->children) {
                 childRotator = child->createRotator(rotateTime);
-                child->modelMatrix = planet->modelMatrix *childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.2f));
-                child->render();  
+                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.5f));
+                child->render();
             }
         }
         else if (planet->name == "venus") {
-            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -120.0f)) * glm::scale(glm::vec3(15));
+            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -100.0f)) * glm::scale(glm::vec3(15));
             planet->render();
             for (Moon* child : planet->children) {
                 childRotator = child->createRotator(rotateTime);
-                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.2f));
+                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.5f));
                 child->render();
             }
         }
         else if (planet->name == "neptune") {
-            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -190.0f)) * glm::scale(glm::vec3(25));
+            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -140.0f)) * glm::scale(glm::vec3(25));
             planet->render();
             for (Moon* child : planet->children) {
                 childRotator = child->createRotator(rotateTime);
-                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.2f));
+                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.5f));
                 child->render();
             }
         }
         else if (planet->name == "hoth") {
-            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -280.0f)) * glm::scale(glm::vec3(28));
+            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -220.0f)) * glm::scale(glm::vec3(28));
             planet->render();
             for (Moon* child : planet->children) {
                 childRotator = child->createRotator(rotateTime);
-                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.2f));
+                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.5f));
                 child->render();
             }
         }
         else if (planet->name == "saturn") {
-            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -380.0f)) * glm::scale(glm::vec3(35));
+            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -300.0f)) * glm::scale(glm::vec3(35));
             planet->render();
             for (Moon* child : planet->children) {
                 childRotator = child->createRotator(rotateTime);
-                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.2f));
+                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.5f));
                 child->render();
             }
         }
     };
 
+    for (Renderable* renderable : renderables) {
+        drawObjectTexture(renderable->context, renderable->modelMatrix, renderable->textureId);
+    }
 
-
-
-
-
-    glm::mat4 shipMatrix = glm::translate(cameraPos + cameraDir * 0.5f) * glm::mat4_cast(glm::inverse(rotation)) * glm::translate(glm::vec3(0, -0.1f, 0)) * glm::rotate(glm::radians(180.0f), glm::vec3(0, 1, 0)) * glm::scale(glm::vec3(0.20f));
-
-    drawObjectTexture(&shipContext, shipMatrix, groundTexture);
-
-    drawCube(glm::translate(glm::vec3(30, 10, 30)));
+    drawCube(glm::translate(glm::vec3(60, 10, 60)));
 
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -599,7 +644,7 @@ void renderScene()
     glUniform1f(glGetUniformLocation(programFinal, "exposure"), exposure);
     renderQuad();
 
-    
+
 
     glutSwapBuffers();
 }
@@ -607,6 +652,7 @@ void renderScene()
 void init()
 {
     srand(time(0));
+    appLoadingTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
     glEnable(GL_DEPTH_TEST);
     programColor = shaderLoader.CreateProgram("shaders/shader_color.vert", "shaders/shader_color.frag");
     programTexture = shaderLoader.CreateProgram("shaders/shader_tex.vert", "shaders/shader_tex.frag");
@@ -614,6 +660,7 @@ void init()
     programBlur = shaderLoader.CreateProgram("shaders/gaussian.vert", "shaders/gaussian.frag");
     programFinal = shaderLoader.CreateProgram("shaders/final.vert", "shaders/final.frag");
     programSkybox = shaderLoader.CreateProgram("shaders/shader_skybox.vert", "shaders/shader_skybox.frag");
+    programTexBloomSun = shaderLoader.CreateProgram("shaders/shader_sun.vert", "shaders/shader_sun.frag");
 
     initRenderables();
     initPhysicsScene();
@@ -725,7 +772,7 @@ void onReshape(int width, int height)
     }
 }
 
-int main(int argc, char ** argv)
+int main(int argc, char** argv)
 {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);

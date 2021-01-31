@@ -243,24 +243,24 @@ void initRenderables()
 
     //MERCURY
     Planet* mercury = new Planet();
-    mercury->init(mercuryTexture, "mercury", 0.4f, glm::vec3(1.0, 1.0, 0));
+    mercury->init(mercuryTexture, "mercury", 0.2f, glm::vec3(0.0, -1.0, 0));
     planets.emplace_back(mercury);
 
     Moon* mercury1 = new Moon();
-    mercury1->init(2.0f, glm::vec3(1, 1, 0), glm::vec3(0, 0, 2.0f));
+    mercury1->init(0.5f, glm::vec3(1, 1, 0), glm::vec3(0, 0, 2.0f));
     mercury->children.emplace_back(mercury1);
     moons.emplace_back(mercury1);
 
 
     //VENUS
     Planet* venus = new Planet();
-    venus->init(venusTexture, "venus", 0.2f, glm::vec3(-1.0, 1.0, 0.0));
+    venus->init(venusTexture, "venus", 0.1f, glm::vec3(0.0, -1.0, 0.0));
     planets.emplace_back(venus);
 
     Moon* venus1 = new Moon();
     Moon* venus2 = new Moon();
-    venus1->init(2.0f, glm::vec3(-1.0, 1.0, 0.0), glm::vec3(0, 0, 2.0f));
-    venus2->init(1.5f, glm::vec3(-1.0, 1.0, 0.0), glm::vec3(0, 0, 2.5f));
+    venus1->init(0.5f, glm::vec3(-1.0, 1.0, 0.0), glm::vec3(0, 0, 2.0f));
+    venus2->init(0.25f, glm::vec3(-1.0, 0.0, 0.0), glm::vec3(0, 0, 2.5f));
     venus->children.emplace_back(venus1);
     venus->children.emplace_back(venus2);
     moons.emplace_back(venus1);
@@ -268,16 +268,16 @@ void initRenderables()
 
     //NEPTUNE
     Planet* neptune = new Planet();
-    neptune->init(neptuneTexture, "neptune", 0.3f, glm::vec3(0.0, 1.0, 0.0));
+    neptune->init(neptuneTexture, "neptune", 0.15f, glm::vec3(0.0, -1.0, 0.0));
     planets.emplace_back(neptune);
 
     Moon* neptune1 = new Moon();
     Moon* neptune2 = new Moon();
     Moon* neptune3 = new Moon();
 
-    neptune1->init(0.5f, glm::vec3(0.0, 1.0, 0.0), glm::vec3(0, 0, 1.5f));
+    neptune1->init(0.5f, glm::vec3(0.0, 1.0, -1.0), glm::vec3(0, 0, 1.5f));
     neptune2->init(1.2f, glm::vec3(1.0, 0.0, 0.0), glm::vec3(0, 0, 2));
-    neptune3->init(1.5f, glm::vec3(1.0, 1.0, 0.0), glm::vec3(0, 0, 2.5f));
+    neptune3->init(1.5f, glm::vec3(1.0, -1.0, 0.0), glm::vec3(0, 0, 2.5f));
 
     neptune->children.emplace_back(neptune1);
     neptune->children.emplace_back(neptune2);
@@ -290,14 +290,14 @@ void initRenderables()
 
     //HOTH
     Planet* hoth = new Planet();
-    hoth->init(hothTexture, "hoth", 0.5f, glm::vec3(1.0, 1.0, 0.0));
+    hoth->init(hothTexture, "hoth", 0.25f, glm::vec3(0.0, -1.0, 0.0));
     planets.emplace_back(hoth);
 
     Moon* hoth1 = new Moon();
     Moon* hoth2 = new Moon();
 
-    hoth1->init(1.5f, glm::vec3(0.0, 1.0, 0.0), glm::vec3(0, 0, 1.5f));
-    hoth2->init(1.7f, glm::vec3(0.0, 1.0, 0.0), glm::vec3(0, 0, 2.0f));
+    hoth1->init(0.3f, glm::vec3(0.0, 1.0, 0.0), glm::vec3(0, 0, 1.5f));
+    hoth2->init(0.4f, glm::vec3(1.0, 0.0, 0.0), glm::vec3(0, 0, 2.0f));
 
     hoth->children.emplace_back(hoth1);
     hoth->children.emplace_back(hoth2);
@@ -307,7 +307,7 @@ void initRenderables()
 
     //SATURN
     Planet* saturn = new Planet();
-    saturn->init(saturnTexture, "saturn", 0.4f, glm::vec3(0.0, -1.0, 0.0));
+    saturn->init(saturnTexture, "saturn", 0.2f, glm::vec3(0.0, -1.0, 0.0));
     planets.emplace_back(saturn);
 
     lights.emplace_back(glm::vec3(0, 0, 0));
@@ -583,43 +583,43 @@ void renderScene()
             planet->render();
             for (Moon* child : planet->children) {
                 childRotator = child->createRotator(rotateTime);
-                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.5f));
+                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.2f));
                 child->render();
             }
         }
         else if (planet->name == "venus") {
-            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -100.0f)) * glm::scale(glm::vec3(15));
+            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -120.0f)) * glm::scale(glm::vec3(15));
             planet->render();
             for (Moon* child : planet->children) {
                 childRotator = child->createRotator(rotateTime);
-                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.5f));
+                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.2f));
                 child->render();
             }
         }
         else if (planet->name == "neptune") {
-            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -140.0f)) * glm::scale(glm::vec3(25));
+            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -190.0f)) * glm::scale(glm::vec3(25));
             planet->render();
             for (Moon* child : planet->children) {
                 childRotator = child->createRotator(rotateTime);
-                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.5f));
+                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.2f));
                 child->render();
             }
         }
         else if (planet->name == "hoth") {
-            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -220.0f)) * glm::scale(glm::vec3(28));
+            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -280.0f)) * glm::scale(glm::vec3(28));
             planet->render();
             for (Moon* child : planet->children) {
                 childRotator = child->createRotator(rotateTime);
-                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.5f));
+                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.2f));
                 child->render();
             }
         }
         else if (planet->name == "saturn") {
-            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -300.0f)) * glm::scale(glm::vec3(35));
+            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -380.0f)) * glm::scale(glm::vec3(35));
             planet->render();
             for (Moon* child : planet->children) {
                 childRotator = child->createRotator(rotateTime);
-                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.5f));
+                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.2f));
                 child->render();
             }
         }

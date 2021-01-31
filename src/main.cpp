@@ -51,7 +51,7 @@ glm::vec3 lightDir = glm::normalize(glm::vec3(0.5, -1, -0.5));
 
 int oldX = 0, oldY = 0, divX, divY;
 float frustumscale;
-
+float ns, we;
 
 
 Physics pxScene(9.8 /* gravity (m/s^2) */);
@@ -361,15 +361,13 @@ void updateTransforms()
 
 void keyboard(unsigned char key, int x, int y)
 {
-    float angleSpeed = 0.1f;
-    float moveSpeed = 5.0f;
     switch (key)
     {
-    case 's': PxRigidBodyExt::addForceAtLocalPos(*shipBody, PxVec3(20 * cameraDir.x, 20 * cameraDir.y, 20 * cameraDir.z), PxVec3(0, 0, 0));  break;
-    case 'w': PxRigidBodyExt::addForceAtLocalPos(*shipBody, PxVec3(-20 * cameraDir.x, -20 * cameraDir.y, -20 * cameraDir.z), PxVec3(0, 0, 0)); break;
-    case 'd': PxRigidBodyExt::addLocalForceAtLocalPos(*shipBody, PxVec3(0, 0, 1), PxVec3(2, 0, 0)); break;
-    case 'a': PxRigidBodyExt::addLocalForceAtLocalPos(*shipBody, PxVec3(0, 0, -1), PxVec3(2, 0, 0)); break;
-    case 'p': shipBody->setLinearVelocity(PxVec3(0, 0, 0)); shipBody->setAngularVelocity(PxVec3(0, 0, 0)); break;
+    case 's': if (ns>-480) ns-=20;  break;
+    case 'w': if (ns < 980) ns+=20; break;
+    case 'd': if (we < 28) we += 2; break;
+    case 'a': if (we > -28) we -= 2; break;
+    case 'p': ns = 0; we = 0; break;
     }
 }
 
@@ -386,7 +384,7 @@ glm::mat4 createCameraMatrix()
     PxTransform pxtr = shipBody->getGlobalPose();
     glm::quat pxtq = glm::quat(pxtr.q.w, pxtr.q.x, pxtr.q.y, pxtr.q.z);
     glm::vec3 cameraDirMat = pxtq * glm::vec3(0, 0, -1);
-    glm::vec3 offset = cameraDirMat * 3.0f;
+    glm::vec3 offset = cameraDirMat * 3.f;
     cameraPos = offset + glm::vec3(pxtr.p.x, pxtr.p.y, pxtr.p.z);
 
 
@@ -541,13 +539,17 @@ void renderScene()
     if (oldtime != ftime)
     {
         oldtime = ftime;
-        PxVec3 ang = shipBody->getAngularVelocity();
-        shipBody->setAngularVelocity(ang * 0.9);
-        PxVec3 lin = shipBody->getLinearVelocity();
-        shipBody->setLinearVelocity(lin * 0.9);
+        we *= 0.7;
+        std::cout << "Moc na przod: " + std::to_string(ns/10.0f) + "%" << std::endl;
+        std::cout << "Moc na boki: " + std::to_string(we*3.33f) + "%" << std::endl << std::endl;
     }
 
     float rotateTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
+
+    shipBody->setLinearVelocity(PxVec3(0, 0, 0)); 
+    shipBody->setAngularVelocity(PxVec3(0, 0, 0));
+    PxRigidBodyExt::addLocalForceAtLocalPos(*shipBody, PxVec3(0, 0, we), PxVec3(2, 0, 0));
+    PxRigidBodyExt::addLocalForceAtLocalPos(*shipBody, PxVec3(0, 0, ns), PxVec3(0, 0, 0));
 
     PxTransform pxtr = shipBody->getGlobalPose();
     glUseProgram(programTexture);

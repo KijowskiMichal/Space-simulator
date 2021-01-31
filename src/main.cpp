@@ -74,6 +74,7 @@ unsigned int pingpongColorbuffers[2];
 
 bool bloom = true;
 float exposure = 2.5f;
+int oldtime;
 
 unsigned int quadVAO = 0;
 unsigned int quadVBO;
@@ -364,12 +365,10 @@ void keyboard(unsigned char key, int x, int y)
     float moveSpeed = 5.0f;
     switch (key)
     {
-    case 'z': cameraAngle -= angleSpeed; break;
-    case 'x': cameraAngle += angleSpeed; break;
-    case 'w': PxRigidBodyExt::addLocalForceAtLocalPos(*shipBody, PxVec3(10, 0, 0), PxVec3(0, 0, 0));  break;
-    case 's': PxRigidBodyExt::addLocalForceAtLocalPos(*shipBody, PxVec3(-10, 0, 0), PxVec3(0, 0, 0)); break;
-    case 'd': PxRigidBodyExt::addLocalForceAtLocalPos(*shipBody, PxVec3(0, 0, 1), PxVec3(1, 0, 0)); break;
-    case 'a': PxRigidBodyExt::addLocalForceAtLocalPos(*shipBody, PxVec3(0, 0, -1), PxVec3(1, 0, 0)); break;
+    case 's': PxRigidBodyExt::addForceAtLocalPos(*shipBody, PxVec3(20 * cameraDir.x, 20 * cameraDir.y, 20 * cameraDir.z), PxVec3(0, 0, 0));  break;
+    case 'w': PxRigidBodyExt::addForceAtLocalPos(*shipBody, PxVec3(-20 * cameraDir.x, -20 * cameraDir.y, -20 * cameraDir.z), PxVec3(0, 0, 0)); break;
+    case 'd': PxRigidBodyExt::addLocalForceAtLocalPos(*shipBody, PxVec3(0, 0, 1), PxVec3(2, 0, 0)); break;
+    case 'a': PxRigidBodyExt::addLocalForceAtLocalPos(*shipBody, PxVec3(0, 0, -1), PxVec3(2, 0, 0)); break;
     case 'p': shipBody->setLinearVelocity(PxVec3(0, 0, 0)); shipBody->setAngularVelocity(PxVec3(0, 0, 0)); break;
     }
 }
@@ -399,6 +398,8 @@ glm::mat4 createCameraMatrix()
 
     glm::vec3 cameraTarget = glm::vec3(pxtr.p.x, pxtr.p.y, pxtr.p.z);
     glm::vec3 cameraDirection = glm::normalize(cameraPos - cameraTarget);
+
+    cameraDir = cameraDirection;
 
     glm::mat4 returnowaTablica = glm::lookAt(cameraPos, cameraPos - cameraDirection, cameraUp);
 
@@ -533,6 +534,17 @@ void renderScene()
             pxScene.step(physicsStepTime);
             physicsTimeToProcess -= physicsStepTime;
         }
+    }
+
+    int ftime = (int)(time/(0.5f));
+
+    if (oldtime != ftime)
+    {
+        oldtime = ftime;
+        PxVec3 ang = shipBody->getAngularVelocity();
+        shipBody->setAngularVelocity(ang * 0.9);
+        PxVec3 lin = shipBody->getLinearVelocity();
+        shipBody->setLinearVelocity(lin * 0.9);
     }
 
     float rotateTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
@@ -711,6 +723,8 @@ void init()
     glUseProgram(programFinal);
     glUniform1i(glGetUniformLocation(programFinal, "scene"), 0);
     glUniform1i(glGetUniformLocation(programFinal, "bloomBlur"), 1);
+
+    oldtime = 0;
 }
 
 void shutdown()

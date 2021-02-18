@@ -2,7 +2,9 @@
 
 #define PX_RELEASE(x)	if(x)	{ x->release(); x = NULL; }
 
-Physics::Physics(float gravity)
+Physics::Physics(float gravity,
+    PxSimulationFilterShader simulationFilterShader,
+    PxSimulationEventCallback* simulationEventCallback)
 {
     foundation = PxCreateFoundation(PX_PHYSICS_VERSION, allocator, errorCallback);
 
@@ -12,7 +14,10 @@ Physics::Physics(float gravity)
     sceneDesc.gravity = PxVec3(0.0f, -gravity, 0.0f);
     dispatcher = PxDefaultCpuDispatcherCreate(2);
     sceneDesc.cpuDispatcher = dispatcher;
-    sceneDesc.filterShader = PxDefaultSimulationFilterShader;
+    sceneDesc.filterShader = simulationFilterShader;
+    sceneDesc.kineKineFilteringMode = PxPairFilteringMode::eKEEP; // So kin-kin contacts with be reported
+    sceneDesc.staticKineFilteringMode = PxPairFilteringMode::eKEEP; // So static-kin constacts will be reported
+    sceneDesc.simulationEventCallback = simulationEventCallback;
     scene = physics->createScene(sceneDesc);
 }
 

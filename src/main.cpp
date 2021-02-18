@@ -13,6 +13,77 @@
 #include "Texture.h"
 #include "Physics.h"
 
+
+
+PxRigidDynamic* shipBody = nullptr;
+PxVec3 shipBodyVel;
+glm::vec3 cubePos = cubePos = glm::vec3(60, 10, 60);
+float ns, we, np, nz;
+float camera = 3.f;
+float cameraTarget = 0;
+int points = 0;
+bool block = false;
+
+
+//------------------------------------------------------------------
+// contact pairs filtering function
+static PxFilterFlags simulationFilterShader(PxFilterObjectAttributes attributes0,
+    PxFilterData filterData0, PxFilterObjectAttributes attributes1, PxFilterData filterData1,
+    PxPairFlags& pairFlags, const void* constantBlock, PxU32 constantBlockSize)
+{
+    pairFlags =
+        PxPairFlag::eCONTACT_DEFAULT | // default contact processing
+        PxPairFlag::eNOTIFY_CONTACT_POINTS | // contact points will be available in onContact callback
+        PxPairFlag::eNOTIFY_TOUCH_FOUND | // onContact callback will be called for this pair
+        PxPairFlag::eNOTIFY_TOUCH_PERSISTS;
+
+    return physx::PxFilterFlag::eDEFAULT;
+}
+
+//------------------------------------------------------------------
+// simulation events processor
+class SimulationEventCallback : public PxSimulationEventCallback
+{
+public:
+    void onContact(const PxContactPairHeader& pairHeader,
+        const PxContactPair* pairs, PxU32 nbPairs)
+    {
+        // HINT: You can check which actors are in contact
+        // using pairHeader.actors[0] and pairHeader.actors[1]
+        const PxU32 bufferSize = 64;
+        PxContactPairPoint contacts[bufferSize];
+        int count = 0;
+        for (PxU32 i = 0; i < nbPairs; i++)
+        {
+            const PxContactPair& cp = pairs[i];
+
+            PxU32 nbContacts = pairs[i].extractContacts(contacts, bufferSize);
+            for (PxU32 j = 0; j < nbContacts; j++)
+            {
+                PxVec3 point = contacts[j].position;
+
+                ns *= -1;
+                we *= -1;
+                np *= -1;
+                nz *= -1;
+            }
+
+        }
+        std::cout << std::endl << std::endl;
+    }
+
+    virtual void onConstraintBreak(PxConstraintInfo* constraints, PxU32 count) {}
+    virtual void onWake(PxActor** actors, PxU32 count) {}
+    virtual void onSleep(PxActor** actors, PxU32 count) {}
+    virtual void onTrigger(PxTriggerPair* pairs, PxU32 count) {}
+    virtual void onAdvance(const PxRigidBody* const* bodyBuffer, const PxTransform* poseBuffer, const PxU32 count) {}
+};
+
+// Initalization of physical scene (PhysX)
+SimulationEventCallback simulationEventCallback;
+Physics pxScene(9.8 /* gravity (m/s^2) */, simulationFilterShader,
+    &simulationEventCallback);
+
 float appLoadingTime;
 
 Core::Shader_Loader shaderLoader;
@@ -52,16 +123,12 @@ glm::vec3 lightDir = glm::normalize(glm::vec3(0.5, -1, -0.5));
 
 int oldX = 0, oldY = 0, divX, divY, itr;
 float frustumscale;
-float ns, we, np, nz;
 
 
-Physics pxScene(9.8 /* gravity (m/s^2) */);
 
 
 const double physicsStepTime = 1.f / 60.f;
 double physicsTimeToProcess = 0;
-
-PxRigidDynamic* shipBody = nullptr;
 PxMaterial* shipMaterial = nullptr;
 
 int SCR_WIDTH = 600;
@@ -79,6 +146,8 @@ int oldtime;
 
 unsigned int quadVAO = 0;
 unsigned int quadVBO;
+
+
 void renderQuad()
 {
     if (quadVAO == 0)
@@ -250,6 +319,7 @@ public:
 
 std::vector<Planet*> planets;
 std::vector<Moon*> moons;
+
 void initRenderables()
 {
     shipModel = obj::loadModelFromFile("models/spaceship.obj");
@@ -388,7 +458,6 @@ void initPhysicsScene()
     shipShape->release();
     //shipBody->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, true);
     shipBody->userData = renderables[0];
-    shipBody->setMass(0.2);
     pxScene.scene->addActor(*shipBody);
 
 }
@@ -426,6 +495,29 @@ void updateTransforms()
     }
 }
 
+void text(int x, int y, std::string text)
+{
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(0, SCR_WIDTH, 0, SCR_HEIGHT, -1.0f, 1.0f);
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glLoadIdentity();
+    glPushAttrib(GL_DEPTH_TEST);
+    glDisable(GL_DEPTH_TEST);
+    glRasterPos2i(x, y);
+    for (int i = 0; i < text.size(); i++)
+    {
+        glutBitmapCharacter(GLUT_BITMAP_9_BY_15, text[i]);
+    }
+    glPopAttrib();
+    glMatrixMode(GL_PROJECTION);
+    glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
+    glPopMatrix();
+}
+
 void keyboard(unsigned char key, int x, int y)
 {
     switch (key)
@@ -439,6 +531,8 @@ void keyboard(unsigned char key, int x, int y)
     case 'c': if (nz < 28) nz += 2; break;
     case 'z': if (nz > -28) nz -= 2; break;
     case 'p': ns = 0; we = 0; break;
+    case '1': if (camera == 3.f) cameraTarget = -1.f; break;
+    case '2': if (camera==2.f) cameraTarget = 1.f; break;
     }
 }
 
@@ -455,7 +549,7 @@ glm::mat4 createCameraMatrix()
     PxTransform pxtr = shipBody->getGlobalPose();
     glm::quat pxtq = glm::quat(pxtr.q.w, pxtr.q.x, pxtr.q.y, pxtr.q.z);
     glm::vec3 cameraDirMat = pxtq * glm::vec3(0, 0, -1);
-    glm::vec3 offset = cameraDirMat * 3.f;
+    glm::vec3 offset = cameraDirMat * camera;
     cameraPos = offset + glm::vec3(pxtr.p.x, pxtr.p.y, pxtr.p.z);
 
 
@@ -473,20 +567,6 @@ glm::mat4 createCameraMatrix()
     glm::mat4 returnowaTablica = glm::lookAt(cameraPos, cameraPos - cameraDirection, cameraUp);
 
     return glm::translate(glm::vec3(0,-1, 0)) * returnowaTablica;
-    /*glm::quat x = glm::angleAxis(glm::radians(divX / 5.0f), glm::vec3(0, 1, 0));
-    glm::quat y = glm::angleAxis(glm::radians(divY / 5.0f), glm::vec3(1, 0, 0));
-    glm::quat z = glm::angleAxis(cameraAngle, glm::vec3(0, 0, 1));
-    glm::quat xy = x * y * z;
-    rotation = glm::normalize(xy * rotation);
-
-    divX = 0;
-    divY = 0;
-    cameraAngle = 0;
-
-    cameraDir = glm::inverse(rotation) * glm::vec3(0, 0, -1);
-    cameraSide = glm::inverse(rotation) * glm::vec3(1, 0, 0);
-
-    return Core::createViewMatrixQuat(cameraPos, rotation);*/
 }
 
 void drawObjectColor(Core::RenderContext* context, glm::mat4 modelMatrix, glm::vec3 color)
@@ -617,6 +697,24 @@ void renderScene()
         np *= 0.7;
         nz *= 0.7;
     }
+    if (cameraTarget != 0)
+    {
+        float tmp = cameraTarget * 0.1;
+        camera += tmp;
+        cameraTarget -= tmp;
+        if (std::abs(cameraTarget) < 0.01f)
+        {
+            cameraTarget = 0;
+            if (camera <= 2.1)
+            {
+                camera = 2;
+            }
+            else
+            {
+                camera = 3;
+            }
+        }
+    }
 
     float rotateTime = glutGet(GLUT_ELAPSED_TIME) / 4000.0f;
 
@@ -624,6 +722,8 @@ void renderScene()
     PxRigidBodyExt::addLocalForceAtLocalPos(*shipBody, PxVec3(0, 0, ns), PxVec3(0, 0, 0));
     PxRigidBodyExt::addLocalForceAtLocalPos(*shipBody, PxVec3(0, np, 0), PxVec3(0, 0, 2));
     PxRigidBodyExt::addLocalForceAtLocalPos(*shipBody, PxVec3(0, nz, 0), PxVec3(2, 0, 0));
+
+    shipBodyVel = shipBody->getLinearVelocity();
 
 
     PxTransform pxtr = shipBody->getGlobalPose();
@@ -636,6 +736,8 @@ void renderScene()
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+
+
 
     glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -713,7 +815,16 @@ void renderScene()
         drawObjectTexture(renderable->context, renderable->modelMatrix, renderable->textureId);
     }
 
-    drawCube(glm::translate(glm::vec3(60, 10, 60)));
+    
+    if (glm::distance(cubePos, glm::vec3(pxtr.p.x, pxtr.p.y, pxtr.p.z)) < 1)
+    {
+        points += 1;
+        cubePos = glm::ballRand(100.f);
+    }
+
+    drawCube(glm::translate(cubePos));
+
+    text(10, 10, "points: "+std::to_string(points));
 
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -741,8 +852,6 @@ void renderScene()
     glUniform1i(glGetUniformLocation(programFinal, "bloom"), bloom);
     glUniform1f(glGetUniformLocation(programFinal, "exposure"), exposure);
     renderQuad();
-
-
 
     glutSwapBuffers();
 }

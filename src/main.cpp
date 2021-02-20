@@ -1,5 +1,6 @@
 #include "glew.h"
 #include "freeglut.h"
+#include "windows.h"
 #include "glm.hpp"
 #include "ext.hpp"
 #include <iostream>
@@ -16,14 +17,19 @@
 
 
 PxRigidDynamic* shipBody = nullptr;
+PxRigidDynamic* shipLE = nullptr;
+PxRigidDynamic* shipRE = nullptr;
 PxVec3 shipBodyVel;
 glm::vec3 cubePos = cubePos = glm::vec3(60, 10, 60);
 float ns, we, np, nz;
 float camera = 3.f;
 float cameraTarget = 0;
 int points = 0;
+int timeToEnd = 120;
 bool block = false;
 
+PxFixedJoint* joint1;
+PxFixedJoint* joint2;
 
 //------------------------------------------------------------------
 // contact pairs filtering function
@@ -66,6 +72,8 @@ public:
                 we *= -1;
                 np *= -1;
                 nz *= -1;
+
+                
             }
 
         }
@@ -105,13 +113,13 @@ std::vector<Renderable*> renderables;
 std::vector<glm::vec3> lights;
 std::vector<float> marksizm;
 
-obj::Model planeModel, shipModel, skyboxModel, boxModel, sphereModel, deathStar;
-Core::RenderContext planeContext, shipContext, boxContext, skyboxContext, sphereContext, deathStarContext;
-GLuint groundTexture, metalTexture, moonTexture, sunTexture, mercuryTexture, venusTexture, hothTexture, saturnTexture, neptuneTexture;
+obj::Model planeModel, shipModel, shipModelLE, shipModelRE, skyboxModel, boxModel, sphereModel, deathStar;
+Core::RenderContext planeContext, shipContext, shipContextLE, shipContextRE, boxContext, skyboxContext, sphereContext, deathStarContext;
+GLuint groundTexture, metalTexture, moonTexture, sunTexture, mercuryTexture, venusTexture, hothTexture, saturnTexture, neptuneTexture, shipTexture;
 GLuint skyboxTexture[6];
 
 glm::vec3 cameraDir;
-glm::vec3 cameraPos = glm::vec3(60, 0, 0);
+glm::vec3 cameraPos = glm::vec3(100, 0, 0);
 glm::vec3 cameraSide;
 float cameraAngle = glm::radians(270.f);
 glm::mat4 cameraMatrix, perspectiveMatrix, shipModelMatrix;
@@ -322,8 +330,12 @@ std::vector<Moon*> moons;
 
 void initRenderables()
 {
-    shipModel = obj::loadModelFromFile("models/spaceship.obj");
+    shipModel = obj::loadModelFromFile("models/ship.obj");
     shipContext.initFromOBJ(shipModel);
+    shipModelLE = obj::loadModelFromFile("models/engineleft.obj");
+    shipContextLE.initFromOBJ(shipModelLE);
+    shipModelRE = obj::loadModelFromFile("models/engineright.obj");
+    shipContextRE.initFromOBJ(shipModelRE);
     sphereModel = obj::loadModelFromFile("models/sphere.obj");
     sphereContext.initFromOBJ(sphereModel);
     deathStar = obj::loadModelFromFile("models/0.obj");
@@ -344,6 +356,7 @@ void initRenderables()
     neptuneTexture = Core::LoadTexture("textures/2k_neptune.jpg");
     hothTexture = Core::LoadTexture("textures/hoth.jpg");
     saturnTexture = Core::LoadTexture("textures/2k_saturn.jpg");
+    shipTexture = Core::LoadTexture("textures/ship.png");
 
     skyboxTexture[0] = Core::LoadTextureSkybox("textures/back.png");
     skyboxTexture[1] = Core::LoadTextureSkybox("textures/bottom.png");
@@ -354,9 +367,21 @@ void initRenderables()
 
     Renderable* ship = new Renderable();
     ship->context = &shipContext;
-    ship->textureId = groundTexture;
-    ship->modelMatrix = glm::rotate(glm::radians(90.f), glm::vec3(0.f, 1.f, 0.f));
+    ship->textureId = shipTexture;
+    ship->modelMatrix = glm::rotate(glm::radians(-90.f), glm::vec3(0.f, 1.f, 0.f));
     renderables.emplace_back(ship);
+
+    Renderable* shipLE = new Renderable();
+    shipLE->context = &shipContextLE;
+    shipLE->textureId = shipTexture;
+    shipLE->modelMatrix = glm::rotate(glm::radians(-90.f), glm::vec3(0.f, 1.f, 0.f));
+    renderables.emplace_back(shipLE);
+
+    Renderable* shipRE = new Renderable();
+    shipRE->context = &shipContextRE;
+    shipRE->textureId = shipTexture;
+    shipRE->modelMatrix = glm::rotate(glm::radians(-90.f), glm::vec3(0.f, 1.f, 0.f));
+    renderables.emplace_back(shipRE);
 
     Planet* sun = new Planet();
     sun->init(sunTexture, "sun", 0, glm::vec3(0, 0, 0));
@@ -453,12 +478,35 @@ void initPhysicsScene()
 {
     shipBody = pxScene.physics->createRigidDynamic(PxTransform(80, 10, 0));
     shipMaterial = pxScene.physics->createMaterial(1, 1, 0.6);
-    PxShape* shipShape = pxScene.physics->createShape(PxBoxGeometry(7, 5, 2.3f), *shipMaterial);
+    //PxShape* shipShape = pxScene.physics->createShape(PxBoxGeometry(7, 5, 2.3f), *shipMaterial);
+    PxShape* shipShape = pxScene.physics->createShape(PxBoxGeometry(1, 1, 1), *shipMaterial);
     shipBody->attachShape(*shipShape);
     shipShape->release();
     //shipBody->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, true);
     shipBody->userData = renderables[0];
     pxScene.scene->addActor(*shipBody);
+
+    shipLE = pxScene.physics->createRigidDynamic(PxTransform(80, 11, 0));
+    PxShape* shipShapeLE = pxScene.physics->createShape(PxBoxGeometry(0.001f, 0.001f, 0.001f), *shipMaterial);
+    shipLE->attachShape(*shipShapeLE);
+    shipShapeLE->release();
+    shipLE->userData = renderables[1];
+    pxScene.scene->addActor(*shipLE);
+
+    shipRE = pxScene.physics->createRigidDynamic(PxTransform(80, 11, 0));
+    PxShape* shipShapeRE = pxScene.physics->createShape(PxBoxGeometry(0.001f, 0.001f, 0.001f), *shipMaterial);
+    shipRE->attachShape(*shipShapeRE);
+    shipShapeRE->release();
+    shipRE->userData = renderables[2];
+    pxScene.scene->addActor(*shipRE);
+
+    joint1 = PxFixedJointCreate(*pxScene.physics, shipBody, PxTransform(-0.489227f, 0.173815f, -0.008409f), shipLE, PxTransform(-0.506138f, 0.104812f, -0.057499f));
+    joint2 = PxFixedJointCreate(*pxScene.physics, shipBody, PxTransform(0.489227f, 0.1f, 0.1f), shipRE, PxTransform(0.506138f, 0.104812f, 0.207124f));
+
+    joint1->setBreakForce(550.f, 550.f);
+    joint2->setBreakForce(550.f, 550.f);
+
+    std::cout << typeid(joint1).name();
 
 }
 
@@ -495,7 +543,7 @@ void updateTransforms()
     }
 }
 
-void text(int x, int y, std::string text)
+void text(int x, int y, std::string text, int rozmiar)
 {
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
@@ -507,9 +555,12 @@ void text(int x, int y, std::string text)
     glPushAttrib(GL_DEPTH_TEST);
     glDisable(GL_DEPTH_TEST);
     glRasterPos2i(x, y);
+    void* rozm = GLUT_BITMAP_HELVETICA_18;
+    if (rozmiar == 10) rozm = GLUT_BITMAP_HELVETICA_10;
+    if (rozmiar == 12) rozm = GLUT_BITMAP_HELVETICA_12;
     for (int i = 0; i < text.size(); i++)
     {
-        glutBitmapCharacter(GLUT_BITMAP_9_BY_15, text[i]);
+        glutBitmapCharacter(rozm, text[i]);
     }
     glPopAttrib();
     glMatrixMode(GL_PROJECTION);
@@ -522,17 +573,17 @@ void keyboard(unsigned char key, int x, int y)
 {
     switch (key)
     {
-    case 's': if (ns>-480) ns-=20;  break;
-    case 'w': if (ns < 980) ns+=20; break;
+    case 'w': if (ns>-480) ns-=20;  break;
+    case 's': if (ns < 980) ns+=20; break;
     case 'd': if (we < 28) we += 2; break;
     case 'a': if (we > -28) we -= 2; break;
-    case 'q': if (np < 28) np += 2; break;
-    case 'e': if (np > -28) np -= 2; break;
-    case 'c': if (nz < 28) nz += 2; break;
-    case 'z': if (nz > -28) nz -= 2; break;
+    case 'e': if (np < 28) np += 2; break;
+    case 'q': if (np > -28) np -= 2; break;
+    case 'z': if (nz < 28) nz += 2; break;
+    case 'c': if (nz > -28) nz -= 2; break;
     case 'p': ns = 0; we = 0; break;
-    case '1': if (camera == 3.f) cameraTarget = -1.f; break;
-    case '2': if (camera==2.f) cameraTarget = 1.f; break;
+    case '1': if (camera == 3.f) cameraTarget = -2.f; break;
+    case '2': if (camera==1.f) cameraTarget = 2.f; break;
     }
 }
 
@@ -548,7 +599,7 @@ glm::mat4 createCameraMatrix()
 {
     PxTransform pxtr = shipBody->getGlobalPose();
     glm::quat pxtq = glm::quat(pxtr.q.w, pxtr.q.x, pxtr.q.y, pxtr.q.z);
-    glm::vec3 cameraDirMat = pxtq * glm::vec3(0, 0, -1);
+    glm::vec3 cameraDirMat = pxtq * glm::vec3(0, 0, 1);
     glm::vec3 offset = cameraDirMat * camera;
     cameraPos = offset + glm::vec3(pxtr.p.x, pxtr.p.y, pxtr.p.z);
 
@@ -672,6 +723,7 @@ void renderSkybox(glm::vec3 userPos) {
 }
 void renderScene()
 {
+
     double time = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
     static double prevTime = time;
     double dtime = time - prevTime;
@@ -685,7 +737,7 @@ void renderScene()
         }
     }
 
-    int ftime = (int)(time/(0.5f));
+    int ftime = (int)(time / (0.5f));
 
     shipBody->setLinearVelocity(PxVec3(0, 0, 0));
     shipBody->setAngularVelocity(PxVec3(0, 0, 0));
@@ -696,6 +748,7 @@ void renderScene()
         we *= 0.7;
         np *= 0.7;
         nz *= 0.7;
+        timeToEnd -= 1;
     }
     if (cameraTarget != 0)
     {
@@ -705,9 +758,9 @@ void renderScene()
         if (std::abs(cameraTarget) < 0.01f)
         {
             cameraTarget = 0;
-            if (camera <= 2.1)
+            if (camera <= 1.1)
             {
-                camera = 2;
+                camera = 1;
             }
             else
             {
@@ -747,85 +800,96 @@ void renderScene()
     updateTransforms();
 
 
-    for (Planet* planet : planets) {
-        glm::mat4 childRotator;
-        glm::mat4 rotator = planet->createRotator(rotateTime);
-        if (planet->name == "sun") {
-            planet->modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, 0)) * glm::scale(glm::vec3(30));
-            planet->renderSun();
-        }
-        else if (planet->name == "mercury") {
-            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -65.0f)) * glm::scale(glm::vec3(5));
-            planet->updateTargetPhysx();
-            planet->render();
-            for (Moon* child : planet->children) {
-                childRotator = child->createRotator(rotateTime);
-                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.2f));
-                child->updateTargetPhysx();
-                child->render();
-            }
-        }
-        else if (planet->name == "venus") {
-            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -120.0f)) * glm::scale(glm::vec3(15));
-            planet->updateTargetPhysx();
-            planet->render();
-            for (Moon* child : planet->children) {
-                childRotator = child->createRotator(rotateTime);
-                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.2f));
-                child->updateTargetPhysx();
-                child->render();
-            }
-        }
-        else if (planet->name == "neptune") {
-            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -190.0f)) * glm::scale(glm::vec3(25));
-            planet->updateTargetPhysx();
-            planet->render();
-            for (Moon* child : planet->children) {
-                childRotator = child->createRotator(rotateTime);
-                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.2f));
-                child->updateTargetPhysx();
-                child->render();
-            }
-        }
-        else if (planet->name == "hoth") {
-            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -280.0f)) * glm::scale(glm::vec3(28));
-            planet->updateTargetPhysx();
-            planet->render();
-            for (Moon* child : planet->children) {
-                childRotator = child->createRotator(rotateTime);
-                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.2f));
-                child->updateTargetPhysx();
-                child->render();
-            }
-        }
-        else if (planet->name == "saturn") {
-            planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -380.0f)) * glm::scale(glm::vec3(35));
-            planet->updateTargetPhysx();
-            planet->render();
-            for (Moon* child : planet->children) {
-                childRotator = child->createRotator(rotateTime);
-                child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.2f));
-                child->updateTargetPhysx();
-                child->render();
-            }
-        }
-    };
-
-    for (Renderable* renderable : renderables) {
-        drawObjectTexture(renderable->context, renderable->modelMatrix, renderable->textureId);
-    }
-
-    
-    if (glm::distance(cubePos, glm::vec3(pxtr.p.x, pxtr.p.y, pxtr.p.z)) < 1)
+    if (timeToEnd >= 0)
     {
-        points += 1;
-        cubePos = glm::ballRand(100.f);
+
+
+        for (Planet* planet : planets) {
+            glm::mat4 childRotator;
+            glm::mat4 rotator = planet->createRotator(rotateTime);
+            if (planet->name == "sun") {
+                planet->modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, 0)) * glm::scale(glm::vec3(30));
+                planet->renderSun();
+            }
+            else if (planet->name == "mercury") {
+                planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -65.0f)) * glm::scale(glm::vec3(5));
+                planet->updateTargetPhysx();
+                planet->render();
+                for (Moon* child : planet->children) {
+                    childRotator = child->createRotator(rotateTime);
+                    child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.2f));
+                    child->updateTargetPhysx();
+                    child->render();
+                }
+            }
+            else if (planet->name == "venus") {
+                planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -120.0f)) * glm::scale(glm::vec3(15));
+                planet->updateTargetPhysx();
+                planet->render();
+                for (Moon* child : planet->children) {
+                    childRotator = child->createRotator(rotateTime);
+                    child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.2f));
+                    child->updateTargetPhysx();
+                    child->render();
+                }
+            }
+            else if (planet->name == "neptune") {
+                planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -190.0f)) * glm::scale(glm::vec3(25));
+                planet->updateTargetPhysx();
+                planet->render();
+                for (Moon* child : planet->children) {
+                    childRotator = child->createRotator(rotateTime);
+                    child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.2f));
+                    child->updateTargetPhysx();
+                    child->render();
+                }
+            }
+            else if (planet->name == "hoth") {
+                planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -280.0f)) * glm::scale(glm::vec3(28));
+                planet->updateTargetPhysx();
+                planet->render();
+                for (Moon* child : planet->children) {
+                    childRotator = child->createRotator(rotateTime);
+                    child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.2f));
+                    child->updateTargetPhysx();
+                    child->render();
+                }
+            }
+            else if (planet->name == "saturn") {
+                planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -380.0f)) * glm::scale(glm::vec3(35));
+                planet->updateTargetPhysx();
+                planet->render();
+                for (Moon* child : planet->children) {
+                    childRotator = child->createRotator(rotateTime);
+                    child->modelMatrix = planet->modelMatrix * childRotator * glm::translate(child->distance) * glm::scale(glm::vec3(0.2f));
+                    child->updateTargetPhysx();
+                    child->render();
+                }
+            }
+        };
+
+        for (Renderable* renderable : renderables) {
+            drawObjectTexture(renderable->context, renderable->modelMatrix, renderable->textureId);
+        }
+
+
+        if (glm::distance(cubePos, glm::vec3(pxtr.p.x, pxtr.p.y, pxtr.p.z)) < 2)
+        {
+            points += 1;
+            cubePos = glm::ballRand(100.f);
+        }
+
+        drawCube(glm::translate(cubePos));
+
+        text(10, 10, "Points: " + std::to_string(points), 18);
+        text(SCR_WIDTH - 160, SCR_HEIGHT - 25, "Time remaining: " + std::to_string(timeToEnd / 2), 18);
+
     }
-
-    drawCube(glm::translate(cubePos));
-
-    text(10, 10, "points: "+std::to_string(points));
-
+    else
+    {
+        text(SCR_WIDTH/2- 135, SCR_HEIGHT/2+20, "You have finished this round.", 18);
+        text(SCR_WIDTH/2-95, SCR_HEIGHT/2-20, "Number of points: " + std::to_string(points), 18);
+    }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     bool horizontal = true, first_iteration = true;

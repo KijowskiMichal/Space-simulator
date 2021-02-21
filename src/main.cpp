@@ -25,7 +25,7 @@ float ns, we, np, nz;
 float camera = 3.f;
 float cameraTarget = 0;
 int points = 0;
-int timeToEnd = 120;
+int timeToEnd = 240;
 bool block = false;
 
 PxFixedJoint* joint1;
@@ -113,9 +113,9 @@ std::vector<Renderable*> renderables;
 std::vector<glm::vec3> lights;
 std::vector<float> marksizm;
 
-obj::Model planeModel, shipModel, shipModelLE, shipModelRE, skyboxModel, boxModel, sphereModel, deathStar;
-Core::RenderContext planeContext, shipContext, shipContextLE, shipContextRE, boxContext, skyboxContext, sphereContext, deathStarContext;
-GLuint groundTexture, metalTexture, moonTexture, sunTexture, mercuryTexture, venusTexture, hothTexture, saturnTexture, neptuneTexture, shipTexture;
+obj::Model planeModel, shipModel, shipModelLE, shipModelRE, skyboxModel, boxModel, sphereModel, deathStar, circleModel;
+Core::RenderContext planeContext, shipContext, shipContextLE, shipContextRE, boxContext, skyboxContext, sphereContext, deathStarContext, circleContext;
+GLuint groundTexture, metalTexture, moonTexture, sunTexture, mercuryTexture, venusTexture, hothTexture, saturnTexture, neptuneTexture, shipTexture, circleTexture;
 GLuint skyboxTexture[6];
 
 glm::vec3 cameraDir;
@@ -346,6 +346,8 @@ void initRenderables()
     skyboxContext.initFromOBJ(skyboxModel);
     planeModel = obj::loadModelFromFile("models/plane.obj");
     planeContext.initFromOBJ(planeModel);
+    circleModel = obj::loadModelFromFile("models/circle.obj");
+    circleContext.initFromOBJ(circleModel);
 
     moonTexture = Core::LoadTexture("textures/moon.jpg");
     groundTexture = Core::LoadTexture("textures/sand.jpg");
@@ -357,6 +359,7 @@ void initRenderables()
     hothTexture = Core::LoadTexture("textures/hoth.jpg");
     saturnTexture = Core::LoadTexture("textures/2k_saturn.jpg");
     shipTexture = Core::LoadTexture("textures/ship.png");
+    circleTexture = Core::LoadTexture("textures/circle.jpg");
 
     skyboxTexture[0] = Core::LoadTextureSkybox("textures/back.png");
     skyboxTexture[1] = Core::LoadTextureSkybox("textures/bottom.png");
@@ -505,8 +508,6 @@ void initPhysicsScene()
 
     joint1->setBreakForce(550.f, 550.f);
     joint2->setBreakForce(550.f, 550.f);
-
-    std::cout << typeid(joint1).name();
 
 }
 
@@ -884,6 +885,10 @@ void renderScene()
         text(10, 10, "Points: " + std::to_string(points), 18);
         text(SCR_WIDTH - 160, SCR_HEIGHT - 25, "Time remaining: " + std::to_string(timeToEnd / 2), 18);
 
+
+        drawObjectTexture(&circleContext, glm::translate(glm::vec3(cameraPos.x, cameraPos.y, cameraPos.z)) * glm::toMat4(glm::inverse(glm::quat_cast(createCameraMatrix())))* glm::translate(glm::vec3(0.8f, 0.2f, -2.4f)) * glm::rotate((float)time, glm::vec3(0,0,1)) *glm::scale(glm::vec3(10)), circleTexture);
+        drawObjectColor(&circleContext, glm::translate(glm::vec3(cameraPos.x, cameraPos.y, cameraPos.z)) * glm::toMat4(glm::inverse(glm::quat_cast(createCameraMatrix())))* glm::translate(glm::vec3((pxtr.p.x*0.17f)/200.f, 0, (pxtr.p.z * 0.17f) / 200.f)) * glm::translate(glm::vec3(0.78f, 0.22f, -2.35f)) * glm::rotate((float)time, glm::vec3(0,0,1)) *glm::scale(glm::vec3(1)), glm::vec3(1,0,0));
+        drawObjectColor(&circleContext, glm::translate(glm::vec3(cameraPos.x, cameraPos.y, cameraPos.z)) * glm::toMat4(glm::inverse(glm::quat_cast(createCameraMatrix())))* glm::translate(glm::vec3((cubePos.x*0.17f)/200.f, 0, (cubePos.z * 0.17f) / 200.f)) * glm::translate(glm::vec3(0.78f, 0.22f, -2.35f)) * glm::rotate((float)time, glm::vec3(0,0,1)) *glm::scale(glm::vec3(1)), glm::vec3(1,1,0));
     }
     else
     {

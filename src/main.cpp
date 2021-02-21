@@ -25,7 +25,7 @@ float ns, we, np, nz;
 float camera = 3.f;
 float cameraTarget = 0;
 int points = 0;
-int timeToEnd = 240;
+int timeToEnd = 360;
 bool block = false;
 
 PxFixedJoint* joint1;
@@ -73,11 +73,11 @@ public:
                 np *= -1;
                 nz *= -1;
 
+                if (ns > 480) ns = 480;
                 
             }
 
         }
-        std::cout << std::endl << std::endl;
     }
 
     virtual void onConstraintBreak(PxConstraintInfo* constraints, PxU32 count) {}
@@ -96,6 +96,7 @@ float appLoadingTime;
 
 Core::Shader_Loader shaderLoader;
 GLuint programColor;
+GLuint programColorWB;
 GLuint programTexture;
 GLuint programSkybox;
 GLuint programBlur;
@@ -113,8 +114,8 @@ std::vector<Renderable*> renderables;
 std::vector<glm::vec3> lights;
 std::vector<float> marksizm;
 
-obj::Model planeModel, shipModel, shipModelLE, shipModelRE, skyboxModel, boxModel, sphereModel, deathStar, circleModel;
-Core::RenderContext planeContext, shipContext, shipContextLE, shipContextRE, boxContext, skyboxContext, sphereContext, deathStarContext, circleContext;
+obj::Model planeModel, shipModel, shipModelLE, shipModelRE, skyboxModel, boxModel, sphereModel, deathStar, circleModel, cylinderModel;
+Core::RenderContext planeContext, shipContext, shipContextLE, shipContextRE, boxContext, skyboxContext, sphereContext, deathStarContext, circleContext, cylinderContext;
 GLuint groundTexture, metalTexture, moonTexture, sunTexture, mercuryTexture, venusTexture, hothTexture, saturnTexture, neptuneTexture, shipTexture, circleTexture;
 GLuint skyboxTexture[6];
 
@@ -348,6 +349,8 @@ void initRenderables()
     planeContext.initFromOBJ(planeModel);
     circleModel = obj::loadModelFromFile("models/circle.obj");
     circleContext.initFromOBJ(circleModel);
+    cylinderModel = obj::loadModelFromFile("models/cylinder.obj");
+    cylinderContext.initFromOBJ(cylinderModel);
 
     moonTexture = Core::LoadTexture("textures/moon.jpg");
     groundTexture = Core::LoadTexture("textures/sand.jpg");
@@ -574,8 +577,8 @@ void keyboard(unsigned char key, int x, int y)
 {
     switch (key)
     {
-    case 'w': if (ns>-480) ns-=20;  break;
-    case 's': if (ns < 980) ns+=20; break;
+    case 'w': if (ns>-980) ns-=20;  break;
+    case 's': if (ns < 480) ns+=20; break;
     case 'd': if (we < 28) we += 2; break;
     case 'a': if (we > -28) we -= 2; break;
     case 'e': if (np < 28) np += 2; break;
@@ -624,6 +627,23 @@ glm::mat4 createCameraMatrix()
 void drawObjectColor(Core::RenderContext* context, glm::mat4 modelMatrix, glm::vec3 color)
 {
     GLuint program = programColor;
+
+    glUseProgram(program);
+
+    glUniform3f(glGetUniformLocation(program, "objectColor"), color.x, color.y, color.z);
+    glUniform3f(glGetUniformLocation(program, "lightDir"), lightDir.x, lightDir.y, lightDir.z);
+
+    glm::mat4 transformation = perspectiveMatrix * cameraMatrix * modelMatrix;
+    glUniformMatrix4fv(glGetUniformLocation(program, "modelViewProjectionMatrix"), 1, GL_FALSE, (float*)&transformation);
+    glUniformMatrix4fv(glGetUniformLocation(program, "modelMatrix"), 1, GL_FALSE, (float*)&modelMatrix);
+
+    Core::DrawContext(*context);
+
+    glUseProgram(0);
+}
+
+void drawObjectColor(GLuint program, Core::RenderContext* context, glm::mat4 modelMatrix, glm::vec3 color)
+{
 
     glUseProgram(program);
 
@@ -883,12 +903,23 @@ void renderScene()
         drawCube(glm::translate(cubePos));
 
         text(10, 10, "Points: " + std::to_string(points), 18);
-        text(SCR_WIDTH - 160, SCR_HEIGHT - 25, "Time remaining: " + std::to_string(timeToEnd / 2), 18);
+        text(SCR_WIDTH - 170, SCR_HEIGHT - 25, "Time remaining: " + std::to_string(timeToEnd / 2), 18);
 
 
         drawObjectTexture(&circleContext, glm::translate(glm::vec3(cameraPos.x, cameraPos.y, cameraPos.z)) * glm::toMat4(glm::inverse(glm::quat_cast(createCameraMatrix())))* glm::translate(glm::vec3(0.8f, 0.2f, -2.4f)) * glm::rotate((float)time, glm::vec3(0,0,1)) *glm::scale(glm::vec3(10)), circleTexture);
         drawObjectColor(&circleContext, glm::translate(glm::vec3(cameraPos.x, cameraPos.y, cameraPos.z)) * glm::toMat4(glm::inverse(glm::quat_cast(createCameraMatrix())))* glm::translate(glm::vec3((pxtr.p.x*0.17f)/200.f, 0, (pxtr.p.z * 0.17f) / 200.f)) * glm::translate(glm::vec3(0.78f, 0.22f, -2.35f)) * glm::rotate((float)time, glm::vec3(0,0,1)) *glm::scale(glm::vec3(1)), glm::vec3(1,0,0));
         drawObjectColor(&circleContext, glm::translate(glm::vec3(cameraPos.x, cameraPos.y, cameraPos.z)) * glm::toMat4(glm::inverse(glm::quat_cast(createCameraMatrix())))* glm::translate(glm::vec3((cubePos.x*0.17f)/200.f, 0, (cubePos.z * 0.17f) / 200.f)) * glm::translate(glm::vec3(0.78f, 0.22f, -2.35f)) * glm::rotate((float)time, glm::vec3(0,0,1)) *glm::scale(glm::vec3(1)), glm::vec3(1,1,0));
+
+        float tmp1 = ns;
+        if (tmp1 > 0) tmp1 = 0;
+        tmp1 *= -1;
+        float tmp2 = ns;
+        if (tmp2 < 0) tmp2 = 0;
+
+        drawObjectColor(programColorWB, &cylinderContext, glm::translate(glm::vec3(cameraPos.x, cameraPos.y, cameraPos.z)) * glm::toMat4(glm::inverse(glm::quat_cast(createCameraMatrix()))) * glm::translate(glm::vec3(-1.05f, 0.1f, -2.4f)) * glm::scale(glm::vec3(0.03f, ((480.f -tmp2) * 0.4f) / 480.f, 0.03f)), glm::vec3(0, 0, 1));
+        drawObjectColor(programColorWB, &cylinderContext, glm::translate(glm::vec3(cameraPos.x, cameraPos.y, cameraPos.z)) * glm::toMat4(glm::inverse(glm::quat_cast(createCameraMatrix()))) * glm::translate(glm::vec3(-1.05f, 0.90f, -2.4f)) * glm::scale(glm::vec3(0.03f, (tmp1*0.4f)/ 980.f, 0.03f)), glm::vec3(1, 0, 0));
+        drawObjectColor(programColorWB, &cylinderContext, glm::translate(glm::vec3(cameraPos.x, cameraPos.y, cameraPos.z)) * glm::toMat4(glm::inverse(glm::quat_cast(createCameraMatrix()))) * glm::translate(glm::vec3(-1.05f, 0.90f, -2.4f)) * glm::scale(glm::vec3(0.03f, (-tmp2*0.4f)/480.f, 0.03f)), glm::vec3(1, 0, 0));
+        drawObjectColor(programColorWB, &cylinderContext, glm::translate(glm::vec3(cameraPos.x, cameraPos.y, cameraPos.z)) * glm::toMat4(glm::inverse(glm::quat_cast(createCameraMatrix()))) * glm::translate(glm::vec3(-1.05f, 1.7f, -2.4f)) * glm::scale(glm::vec3(0.03f, -((980.f - tmp1) * 0.4f) / 980.f, 0.03f)), glm::vec3(0, 1, 0));
     }
     else
     {
@@ -931,6 +962,7 @@ void init()
     appLoadingTime = glutGet(GLUT_ELAPSED_TIME) / 1000.0f;
     glEnable(GL_DEPTH_TEST);
     programColor = shaderLoader.CreateProgram("shaders/shader_color.vert", "shaders/shader_color.frag");
+    programColorWB = shaderLoader.CreateProgram("shaders/shader_color_wb.vert", "shaders/shader_color_wb.frag");
     programTexture = shaderLoader.CreateProgram("shaders/shader_tex.vert", "shaders/shader_tex.frag");
     programTexBloom = shaderLoader.CreateProgram("shaders/shader_tex_bloom.vert", "shaders/shader_tex_bloom.frag");
     programBlur = shaderLoader.CreateProgram("shaders/gaussian.vert", "shaders/gaussian.frag");

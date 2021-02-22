@@ -261,7 +261,9 @@ struct Particle {
 class ParticleEngine
 {
 public:
-    unsigned int nr_particles = 200;
+    unsigned int nr_particles = 400;
+    unsigned int shouldbe_nr_particles = nr_particles;
+    unsigned int temp_nr_particles = nr_particles;
     glm::vec3 positionOfEmiter = glm::vec3(0);
     glm::vec3 positionOfShip = glm::vec3(0);
     std::vector<Particle> particles;
@@ -283,27 +285,34 @@ public:
             particles.push_back(*particle);
         }
     }
-    void update(float dt)
+    void update(float dt, unsigned int shouldbe)
     {
+        shouldbe_nr_particles = shouldbe;
         for (unsigned int i = 0; i < nr_particles; ++i)
         {
             Particle& p = particles[i];
             float q = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+            float copy = p.Life;
             p.Life -= dt*(q/3+0.9);
-            if (p.Life<= 0.0f)
+            if ((copy > 0) && (p.Life <= 0))
+            {
+                temp_nr_particles -= 1;
+            }
+            if ((p.Life<= 0.0f) && (temp_nr_particles< shouldbe_nr_particles))
             {
                 p.Position = glm::vec3(0);
                 float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
                 float z = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
                 float g = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
 
-                p.Velocity = glm::vec3((r / 5.f) - 0.1f, (r / 5.f) - 0.1f, (z / 2.f) + 0.5);
+                p.Velocity = glm::vec3((r / 5.f) - 0.1f, (r / 5.f) - 0.1f, ((z / 2.f) + 0.5)* (((float)shouldbe / nr_particles)/2.f+0.5));
                 p.Color = glm::vec3(1, 1, 1);
                 p.Life = 2.f*(g/3+0.85);
+                temp_nr_particles += 1;
             }
             else
             {
-                p.Position = p.Position + (p.Velocity * dt);
+                p.Position = p.Position + (p.Velocity  * dt);
             }
         }
     }
@@ -312,7 +321,7 @@ public:
         for (unsigned int i = 0; i < nr_particles; ++i)
         {
             Particle& p = particles[i];
-            drawObjectColor(&circleContext, glm::translate(positionOfShip)*glm::toMat4(quaterion)*glm::translate(positionOfEmiter)*glm::translate(p.Position)*glm::scale(glm::vec3(1)), p.Color);
+            drawObjectColor(&circleContext, glm::translate(positionOfShip)*glm::toMat4(quaterion)*glm::translate(positionOfEmiter)*glm::translate(p.Position)*glm::scale(glm::vec3(0.5f)), p.Color);
         }
     }
 };
@@ -883,12 +892,12 @@ void renderScene()
     leftEngine.positionOfEmiter = glm::vec3(-0.3240665, 0.4, 0.838885);
     leftEngine.positionOfShip = glm::vec3(pxtr.p.x, pxtr.p.y, pxtr.p.z);
     leftEngine.quaterion = glm::quat(pxtr.q.w, pxtr.q.x, pxtr.q.y, pxtr.q.z);
-    leftEngine.update(dtime);
+    leftEngine.update(dtime, std::abs(ns / 2.5f));
 
     rightEngine.positionOfEmiter = glm::vec3(0.28, 0.35, 0.838885);
     rightEngine.positionOfShip = glm::vec3(pxtr.p.x, pxtr.p.y, pxtr.p.z);
     rightEngine.quaterion = glm::quat(pxtr.q.w, pxtr.q.x, pxtr.q.y, pxtr.q.z);
-    rightEngine.update(dtime);
+    rightEngine.update(dtime, std::abs(ns / 2.5f));
 
 
     cameraMatrix = createCameraMatrix();

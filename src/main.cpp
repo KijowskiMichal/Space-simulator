@@ -20,7 +20,7 @@ PxRigidDynamic* shipBody = nullptr;
 PxRigidDynamic* shipLE = nullptr;
 PxRigidDynamic* shipRE = nullptr;
 PxVec3 shipBodyVel;
-glm::vec3 cubePos = cubePos = glm::vec3(60, 10, 60);
+glm::vec3 cubePos = cubePos = glm::vec3(100 , 10, -10);
 float ns, we, np, nz;
 float camera = 3.f;
 float cameraTarget = 0;
@@ -216,6 +216,109 @@ void drawObjectTexture(GLuint program, Core::RenderContext* context, glm::mat4 m
 
     glUseProgram(0);
 }
+
+void drawObjectColor(Core::RenderContext* context, glm::mat4 modelMatrix, glm::vec3 color)
+{
+    GLuint program = programColor;
+
+    glUseProgram(program);
+
+    glUniform3f(glGetUniformLocation(program, "objectColor"), color.x, color.y, color.z);
+    glUniform3f(glGetUniformLocation(program, "lightDir"), lightDir.x, lightDir.y, lightDir.z);
+
+    glm::mat4 transformation = perspectiveMatrix * cameraMatrix * modelMatrix;
+    glUniformMatrix4fv(glGetUniformLocation(program, "modelViewProjectionMatrix"), 1, GL_FALSE, (float*)&transformation);
+    glUniformMatrix4fv(glGetUniformLocation(program, "modelMatrix"), 1, GL_FALSE, (float*)&modelMatrix);
+
+    Core::DrawContext(*context);
+
+    glUseProgram(0);
+}
+
+void drawObjectColor(GLuint program, Core::RenderContext* context, glm::mat4 modelMatrix, glm::vec3 color)
+{
+
+    glUseProgram(program);
+
+    glUniform3f(glGetUniformLocation(program, "objectColor"), color.x, color.y, color.z);
+    glUniform3f(glGetUniformLocation(program, "lightDir"), lightDir.x, lightDir.y, lightDir.z);
+
+    glm::mat4 transformation = perspectiveMatrix * cameraMatrix * modelMatrix;
+    glUniformMatrix4fv(glGetUniformLocation(program, "modelViewProjectionMatrix"), 1, GL_FALSE, (float*)&transformation);
+    glUniformMatrix4fv(glGetUniformLocation(program, "modelMatrix"), 1, GL_FALSE, (float*)&modelMatrix);
+
+    Core::DrawContext(*context);
+
+    glUseProgram(0);
+}
+
+struct Particle {
+    glm::vec3 Position, Velocity;
+    glm::vec3 Color;
+    float     Life;
+};
+
+class ParticleEngine
+{
+public:
+    unsigned int nr_particles = 200;
+    glm::vec3 positionOfEmiter = glm::vec3(0);
+    glm::vec3 positionOfShip = glm::vec3(0);
+    std::vector<Particle> particles;
+    glm::quat quaterion = glm::quat();
+    void start(glm::vec3 position)
+    {
+        positionOfEmiter = position;
+        for (unsigned int i = 0; i < nr_particles; ++i)
+        {
+            Particle *particle = &Particle();
+            particle->Position = glm::vec3(0);
+            float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+            float z = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+            float g = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+
+            particle->Velocity = glm::vec3((r / 5.f) - 0.1f, (r / 5.f) - 0.1f, (z / 2.f) + 0.5);
+            particle->Color = glm::vec3(1, 1, 1);
+            particle->Life = 2.f * g;
+            particles.push_back(*particle);
+        }
+    }
+    void update(float dt)
+    {
+        for (unsigned int i = 0; i < nr_particles; ++i)
+        {
+            Particle& p = particles[i];
+            float q = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+            p.Life -= dt*(q/3+0.9);
+            if (p.Life<= 0.0f)
+            {
+                p.Position = glm::vec3(0);
+                float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+                float z = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+                float g = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+
+                p.Velocity = glm::vec3((r / 5.f) - 0.1f, (r / 5.f) - 0.1f, (z / 2.f) + 0.5);
+                p.Color = glm::vec3(1, 1, 1);
+                p.Life = 2.f*(g/3+0.85);
+            }
+            else
+            {
+                p.Position = p.Position + (p.Velocity * dt);
+            }
+        }
+    }
+    void draw()
+    {
+        for (unsigned int i = 0; i < nr_particles; ++i)
+        {
+            Particle& p = particles[i];
+            drawObjectColor(&circleContext, glm::translate(positionOfShip)*glm::toMat4(quaterion)*glm::translate(positionOfEmiter)*glm::translate(p.Position)*glm::scale(glm::vec3(1)), p.Color);
+        }
+    }
+};
+
+ParticleEngine leftEngine = ParticleEngine();
+ParticleEngine rightEngine = ParticleEngine();
 
 class Moon {
 public:
@@ -478,6 +581,9 @@ void initRenderables()
     planets.emplace_back(saturn);
 
     lights.emplace_back(glm::vec3(0, 0, 0));
+
+    leftEngine.start(glm::vec3(-0.648133, 0.645315, 1.67777));
+    rightEngine.start(glm::vec3(0.648133, 0.645315, 1.67777));
 }
 
 void initPhysicsScene()
@@ -488,7 +594,7 @@ void initPhysicsScene()
     PxShape* shipShape = pxScene.physics->createShape(PxBoxGeometry(1, 1, 1), *shipMaterial);
     shipBody->attachShape(*shipShape);
     shipShape->release();
-    //shipBody->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, true);
+    shipBody->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, true);
     shipBody->userData = renderables[0];
     pxScene.scene->addActor(*shipBody);
 
@@ -496,6 +602,7 @@ void initPhysicsScene()
     PxShape* shipShapeLE = pxScene.physics->createShape(PxBoxGeometry(0.001f, 0.001f, 0.001f), *shipMaterial);
     shipLE->attachShape(*shipShapeLE);
     shipShapeLE->release();
+    shipLE->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, true);
     shipLE->userData = renderables[1];
     pxScene.scene->addActor(*shipLE);
 
@@ -503,6 +610,7 @@ void initPhysicsScene()
     PxShape* shipShapeRE = pxScene.physics->createShape(PxBoxGeometry(0.001f, 0.001f, 0.001f), *shipMaterial);
     shipRE->attachShape(*shipShapeRE);
     shipShapeRE->release();
+    shipRE->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, true);
     shipRE->userData = renderables[2];
     pxScene.scene->addActor(*shipRE);
 
@@ -624,41 +732,6 @@ glm::mat4 createCameraMatrix()
     return glm::translate(glm::vec3(0,-1, 0)) * returnowaTablica;
 }
 
-void drawObjectColor(Core::RenderContext* context, glm::mat4 modelMatrix, glm::vec3 color)
-{
-    GLuint program = programColor;
-
-    glUseProgram(program);
-
-    glUniform3f(glGetUniformLocation(program, "objectColor"), color.x, color.y, color.z);
-    glUniform3f(glGetUniformLocation(program, "lightDir"), lightDir.x, lightDir.y, lightDir.z);
-
-    glm::mat4 transformation = perspectiveMatrix * cameraMatrix * modelMatrix;
-    glUniformMatrix4fv(glGetUniformLocation(program, "modelViewProjectionMatrix"), 1, GL_FALSE, (float*)&transformation);
-    glUniformMatrix4fv(glGetUniformLocation(program, "modelMatrix"), 1, GL_FALSE, (float*)&modelMatrix);
-
-    Core::DrawContext(*context);
-
-    glUseProgram(0);
-}
-
-void drawObjectColor(GLuint program, Core::RenderContext* context, glm::mat4 modelMatrix, glm::vec3 color)
-{
-
-    glUseProgram(program);
-
-    glUniform3f(glGetUniformLocation(program, "objectColor"), color.x, color.y, color.z);
-    glUniform3f(glGetUniformLocation(program, "lightDir"), lightDir.x, lightDir.y, lightDir.z);
-
-    glm::mat4 transformation = perspectiveMatrix * cameraMatrix * modelMatrix;
-    glUniformMatrix4fv(glGetUniformLocation(program, "modelViewProjectionMatrix"), 1, GL_FALSE, (float*)&transformation);
-    glUniformMatrix4fv(glGetUniformLocation(program, "modelMatrix"), 1, GL_FALSE, (float*)&modelMatrix);
-
-    Core::DrawContext(*context);
-
-    glUseProgram(0);
-}
-
 void drawCube(glm::mat4 modelMatrix)
 {
     glm::vec3 color = glm::vec3(1, 0.843f, 0);
@@ -758,6 +831,8 @@ void renderScene()
         }
     }
 
+    
+
     int ftime = (int)(time / (0.5f));
 
     shipBody->setLinearVelocity(PxVec3(0, 0, 0));
@@ -804,6 +879,17 @@ void renderScene()
     glUseProgram(programTexture);
     glUniform3f(glGetUniformLocation(programTexture, "viewPos"), pxtr.p.x, pxtr.p.y + 3, pxtr.p.z + 8);
     glUseProgram(0);
+
+    leftEngine.positionOfEmiter = glm::vec3(-0.3240665, 0.4, 0.838885);
+    leftEngine.positionOfShip = glm::vec3(pxtr.p.x, pxtr.p.y, pxtr.p.z);
+    leftEngine.quaterion = glm::quat(pxtr.q.w, pxtr.q.x, pxtr.q.y, pxtr.q.z);
+    leftEngine.update(dtime);
+
+    rightEngine.positionOfEmiter = glm::vec3(0.28, 0.35, 0.838885);
+    rightEngine.positionOfShip = glm::vec3(pxtr.p.x, pxtr.p.y, pxtr.p.z);
+    rightEngine.quaterion = glm::quat(pxtr.q.w, pxtr.q.x, pxtr.q.y, pxtr.q.z);
+    rightEngine.update(dtime);
+
 
     cameraMatrix = createCameraMatrix();
     perspectiveMatrix = Core::createPerspectiveMatrix(1.f, 3000.f);
@@ -920,6 +1006,10 @@ void renderScene()
         drawObjectColor(programColorWB, &cylinderContext, glm::translate(glm::vec3(cameraPos.x, cameraPos.y, cameraPos.z)) * glm::toMat4(glm::inverse(glm::quat_cast(createCameraMatrix()))) * glm::translate(glm::vec3(-1.05f, 0.90f, -2.4f)) * glm::scale(glm::vec3(0.03f, (tmp1*0.4f)/ 980.f, 0.03f)), glm::vec3(1, 0, 0));
         drawObjectColor(programColorWB, &cylinderContext, glm::translate(glm::vec3(cameraPos.x, cameraPos.y, cameraPos.z)) * glm::toMat4(glm::inverse(glm::quat_cast(createCameraMatrix()))) * glm::translate(glm::vec3(-1.05f, 0.90f, -2.4f)) * glm::scale(glm::vec3(0.03f, (-tmp2*0.4f)/480.f, 0.03f)), glm::vec3(1, 0, 0));
         drawObjectColor(programColorWB, &cylinderContext, glm::translate(glm::vec3(cameraPos.x, cameraPos.y, cameraPos.z)) * glm::toMat4(glm::inverse(glm::quat_cast(createCameraMatrix()))) * glm::translate(glm::vec3(-1.05f, 1.7f, -2.4f)) * glm::scale(glm::vec3(0.03f, -((980.f - tmp1) * 0.4f) / 980.f, 0.03f)), glm::vec3(0, 1, 0));
+    
+    
+        leftEngine.draw();
+        rightEngine.draw();
     }
     else
     {

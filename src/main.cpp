@@ -249,12 +249,13 @@ public:
 
             particle->Velocity = glm::vec3((r / 5.f) - 0.1f, (r / 5.f) - 0.1f, (z / 2.f) + 0.5);
             particle->Color = glm::vec3(1, 1, 1);
-            particle->Life = -1;
+            particle->Life = 1.f;
             particles.push_back(*particle);
         }
     }
     void update(float dt, unsigned int shouldbe)
     {
+
         shouldbe_nr_particles = shouldbe;
         for (unsigned int i = 0; i < nr_particles; ++i)
         {
@@ -346,14 +347,14 @@ public:
                     explosion = ParticleExplosion();
                     explosion.start(glm::vec3(point.x, point.y, point.z));
                     explosion.exp = true;
-
-                    ns *= -1;
-                    we *= -1;
-                    np *= -1;
-                    nz *= -1;
-
-                    if (ns > 480) ns = 480;
                 }
+
+                ns *= -1;
+                we *= -1;
+                np *= -1;
+                nz *= -1;
+
+                if (ns > 480) ns = 480;
             }
 
         }

@@ -15,6 +15,17 @@
 #include "Physics.h"
 
 
+float appLoadingTime;
+
+Core::Shader_Loader shaderLoader;
+GLuint programColor;
+GLuint programColorWB;
+GLuint programTexture;
+GLuint programSkybox;
+GLuint programBlur;
+GLuint programFinal;
+GLuint programTexBloom;
+GLuint programTexBloomSun;
 
 PxRigidDynamic* shipBody = nullptr;
 PxRigidDynamic* shipLE = nullptr;
@@ -30,94 +41,8 @@ bool block = false;
 
 bool EWork = true;
 
-PxFixedJoint* joint1;
-PxFixedJoint* joint2;
+float ttb = 5;
 
-//------------------------------------------------------------------
-// contact pairs filtering function
-static PxFilterFlags simulationFilterShader(PxFilterObjectAttributes attributes0,
-    PxFilterData filterData0, PxFilterObjectAttributes attributes1, PxFilterData filterData1,
-    PxPairFlags& pairFlags, const void* constantBlock, PxU32 constantBlockSize)
-{
-    pairFlags =
-        PxPairFlag::eCONTACT_DEFAULT | // default contact processing
-        PxPairFlag::eNOTIFY_CONTACT_POINTS | // contact points will be available in onContact callback
-        PxPairFlag::eNOTIFY_TOUCH_FOUND | // onContact callback will be called for this pair
-        PxPairFlag::eNOTIFY_TOUCH_PERSISTS;
-
-    return physx::PxFilterFlag::eDEFAULT;
-}
-
-//------------------------------------------------------------------
-// simulation events processor
-class SimulationEventCallback : public PxSimulationEventCallback
-{
-public:
-    void onContact(const PxContactPairHeader& pairHeader,
-        const PxContactPair* pairs, PxU32 nbPairs)
-    {
-        // HINT: You can check which actors are in contact
-        // using pairHeader.actors[0] and pairHeader.actors[1]
-        const PxU32 bufferSize = 64;
-        PxContactPairPoint contacts[bufferSize];
-        int count = 0;
-        for (PxU32 i = 0; i < nbPairs; i++)
-        {
-            const PxContactPair& cp = pairs[i];
-
-            PxU32 nbContacts = pairs[i].extractContacts(contacts, bufferSize);
-            for (PxU32 j = 0; j < nbContacts; j++)
-            {
-                PxVec3 point = contacts[j].position;
-
-                ns *= -1;
-                we *= -1;
-                np *= -1;
-                nz *= -1;
-
-                if (ns > 480) ns = 480;
-                
-            }
-
-        }
-    }
-
-    virtual void onConstraintBreak(PxConstraintInfo* constraints, PxU32 count) 
-    {
-        EWork = false;
-    }
-    virtual void onWake(PxActor** actors, PxU32 count) {}
-    virtual void onSleep(PxActor** actors, PxU32 count) {}
-    virtual void onTrigger(PxTriggerPair* pairs, PxU32 count) {}
-    virtual void onAdvance(const PxRigidBody* const* bodyBuffer, const PxTransform* poseBuffer, const PxU32 count) {}
-};
-
-// Initalization of physical scene (PhysX)
-SimulationEventCallback simulationEventCallback;
-Physics pxScene(9.8 /* gravity (m/s^2) */, simulationFilterShader,
-    &simulationEventCallback);
-
-float appLoadingTime;
-
-Core::Shader_Loader shaderLoader;
-GLuint programColor;
-GLuint programColorWB;
-GLuint programTexture;
-GLuint programSkybox;
-GLuint programBlur;
-GLuint programFinal;
-GLuint programTexBloom;
-GLuint programTexBloomSun;
-
-
-struct Renderable {
-    Core::RenderContext* context;
-    glm::mat4 modelMatrix;
-    GLuint textureId;
-};
-std::vector<Renderable*> renderables;
-std::vector<glm::vec3> lights;
-std::vector<float> marksizm;
 
 obj::Model planeModel, shipModel, shipModelLE, shipModelRE, skyboxModel, boxModel, sphereModel, deathStar, circleModel, cylinderModel;
 Core::RenderContext planeContext, shipContext, shipContextLE, shipContextRE, boxContext, skyboxContext, sphereContext, deathStarContext, circleContext, cylinderContext;
@@ -137,55 +62,6 @@ glm::vec3 lightDir = glm::normalize(glm::vec3(0.5, -1, -0.5));
 
 int oldX = 0, oldY = 0, divX, divY, itr;
 float frustumscale;
-
-
-
-
-const double physicsStepTime = 1.f / 60.f;
-double physicsTimeToProcess = 0;
-PxMaterial* shipMaterial = nullptr;
-
-int SCR_WIDTH = 600;
-int SCR_HEIGHT = 600;
-
-unsigned int hdrFBO;
-unsigned int colorBuffers[2];
-unsigned int rboDepth;
-unsigned int pingpongFBO[2];
-unsigned int pingpongColorbuffers[2];
-
-bool bloom = true;
-float exposure = 2.5f;
-int oldtime;
-
-unsigned int quadVAO = 0;
-unsigned int quadVBO;
-
-
-void renderQuad()
-{
-    if (quadVAO == 0)
-    {
-        float quadVertices[] = {
-            -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
-            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
-             1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
-             1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
-        };
-        glGenVertexArrays(1, &quadVAO);
-        glGenBuffers(1, &quadVBO);
-        glBindVertexArray(quadVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-    }
-    glBindVertexArray(quadVAO);
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    glBindVertexArray(0);
-}
 
 void drawObjectTexture(Core::RenderContext* context, glm::mat4 modelMatrix, GLuint textureId)
 {
@@ -257,10 +133,97 @@ void drawObjectColor(GLuint program, Core::RenderContext* context, glm::mat4 mod
     glUseProgram(0);
 }
 
+bool randomBool() {
+    return 0 + (rand() % (1 - 0 + 1)) == 1;
+}
+
 struct Particle {
     glm::vec3 Position, Velocity;
     glm::vec3 Color;
     float     Life;
+};
+
+class ParticleExplosion
+{
+public:
+    unsigned int nr_particles = 2500;
+    glm::vec3 positionOfEmiter = glm::vec3(0);
+    std::vector<Particle> particles;
+    glm::quat quaterion = glm::quat();
+    bool exp = false;
+    void start(glm::vec3 position)
+    {
+        positionOfEmiter = position;
+        for (unsigned int i = 0; i < nr_particles; ++i)
+        {
+            Particle* particle = &Particle();
+            particle->Position = glm::vec3(0);
+            float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+            float z = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+            float g = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+            float f1 = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+            float f2 = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+
+            if (randomBool()) r *= -1;
+            if (randomBool()) z *= -1;
+            if (randomBool()) g *= -1;
+
+            particle->Velocity = glm::vec3(r, z, g) * (f1 / 3 + 0.85);
+            particle->Color = glm::vec3(1, 0.91, 0.01);
+            particle->Life = 3.f * f2;
+            particles.push_back(*particle);
+        }
+    }
+    void update(float dt)
+    {
+        if (exp) for (unsigned int i = 0; i < nr_particles; ++i)
+        {
+            Particle& p = particles[i];
+            float q = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+            p.Life -= dt * (q / 3 + 0.9);
+            if (p.Life <= 0.0f)
+            {
+            }
+            else
+            {
+                p.Position = p.Position + (p.Velocity * dt);
+                float distance = glm::distance(glm::vec3(0), p.Position);
+                if (distance > 1)
+                {
+                    if (distance > 1.5)
+                    {
+                        if (distance > 2)
+                        {
+                            if (distance > 2.5)
+                            {
+                                p.Color = glm::vec3(1, 0, 0);
+                            }
+                            else
+                            {
+                                p.Color = glm::vec3(1, 0.35, 0);
+                            }
+                        }
+                        else
+                        {
+                            p.Color = glm::vec3(1, 0.60, 0);
+                        }
+                    }
+                    else
+                    {
+                        p.Color = glm::vec3(1, 0.81, 0);
+                    }
+                }
+            }
+        }
+    }
+    void draw()
+    {
+        if (exp) for (unsigned int i = 0; i < nr_particles; ++i)
+        {
+            Particle& p = particles[i];
+            if (p.Life>=0) drawObjectColor(programColorWB, &circleContext, glm::translate(positionOfEmiter) * glm::translate(p.Position) * glm::scale(glm::vec3(4.f)), p.Color);
+        }
+    }
 };
 
 class ParticleEngine
@@ -278,7 +241,7 @@ public:
         positionOfEmiter = position;
         for (unsigned int i = 0; i < nr_particles; ++i)
         {
-            Particle *particle = &Particle();
+            Particle* particle = &Particle();
             particle->Position = glm::vec3(0);
             float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
             float z = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
@@ -286,7 +249,7 @@ public:
 
             particle->Velocity = glm::vec3((r / 5.f) - 0.1f, (r / 5.f) - 0.1f, (z / 2.f) + 0.5);
             particle->Color = glm::vec3(1, 1, 1);
-            particle->Life = 2.f * g;
+            particle->Life = -1;
             particles.push_back(*particle);
         }
     }
@@ -298,26 +261,26 @@ public:
             Particle& p = particles[i];
             float q = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
             float copy = p.Life;
-            p.Life -= dt*(q/3+0.9);
+            p.Life -= dt * (q / 3 + 0.9);
             if ((copy > 0) && (p.Life <= 0))
             {
                 temp_nr_particles -= 1;
             }
-            if ((p.Life<= 0.0f) && (temp_nr_particles< shouldbe_nr_particles))
+            if ((p.Life <= 0.0f) && (temp_nr_particles < shouldbe_nr_particles))
             {
                 p.Position = glm::vec3(0);
                 float r = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
                 float z = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
                 float g = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
 
-                p.Velocity = glm::vec3((r / 5.f) - 0.1f, (r / 5.f) - 0.1f, ((z / 2.f) + 0.5)* (((float)shouldbe / nr_particles)/2.f+0.5));
+                p.Velocity = glm::vec3((r / 5.f) - 0.1f, (r / 5.f) - 0.1f, ((z / 2.f) + 0.5) * (((float)shouldbe / nr_particles) / 2.f + 0.5));
                 p.Color = glm::vec3(1, 1, 1);
-                p.Life = 2.f*(g/3+0.85);
+                p.Life = 2.f * (g / 3 + 0.85);
                 temp_nr_particles += 1;
             }
             else
             {
-                p.Position = p.Position + (p.Velocity  * dt);
+                p.Position = p.Position + (p.Velocity * dt);
             }
         }
     }
@@ -326,13 +289,150 @@ public:
         if (EWork) for (unsigned int i = 0; i < nr_particles; ++i)
         {
             Particle& p = particles[i];
-            drawObjectColor(&circleContext, glm::translate(positionOfShip)*glm::toMat4(quaterion)*glm::translate(positionOfEmiter)*glm::translate(p.Position)*glm::scale(glm::vec3(0.5f)), p.Color);
+            drawObjectColor(&circleContext, glm::translate(positionOfShip) * glm::toMat4(quaterion) * glm::translate(positionOfEmiter) * glm::translate(p.Position) * glm::scale(glm::vec3(0.5f)), p.Color);
         }
     }
 };
 
 ParticleEngine leftEngine = ParticleEngine();
 ParticleEngine rightEngine = ParticleEngine();
+
+
+ParticleExplosion explosion = ParticleExplosion();
+
+PxFixedJoint* joint1;
+PxFixedJoint* joint2;
+
+//------------------------------------------------------------------
+// contact pairs filtering function
+static PxFilterFlags simulationFilterShader(PxFilterObjectAttributes attributes0,
+    PxFilterData filterData0, PxFilterObjectAttributes attributes1, PxFilterData filterData1,
+    PxPairFlags& pairFlags, const void* constantBlock, PxU32 constantBlockSize)
+{
+    pairFlags =
+        PxPairFlag::eCONTACT_DEFAULT | // default contact processing
+        PxPairFlag::eNOTIFY_CONTACT_POINTS | // contact points will be available in onContact callback
+        PxPairFlag::eNOTIFY_TOUCH_FOUND | // onContact callback will be called for this pair
+        PxPairFlag::eNOTIFY_TOUCH_PERSISTS;
+
+    return physx::PxFilterFlag::eDEFAULT;
+}
+
+//------------------------------------------------------------------
+// simulation events processor
+class SimulationEventCallback : public PxSimulationEventCallback
+{
+public:
+    void onContact(const PxContactPairHeader& pairHeader,
+        const PxContactPair* pairs, PxU32 nbPairs)
+    {
+        // HINT: You can check which actors are in contact
+        // using pairHeader.actors[0] and pairHeader.actors[1]
+        const PxU32 bufferSize = 64;
+        PxContactPairPoint contacts[bufferSize];
+        int count = 0;
+        for (PxU32 i = 0; i < nbPairs; i++)
+        {
+            const PxContactPair& cp = pairs[i];
+
+            PxU32 nbContacts = pairs[i].extractContacts(contacts, bufferSize);
+            for (PxU32 j = 0; j < nbContacts; j++)
+            {
+                PxVec3 point = contacts[j].position;
+
+                if (ttb < appLoadingTime)
+                {
+                    ttb = appLoadingTime + 5;
+                    explosion = ParticleExplosion();
+                    explosion.start(glm::vec3(point.x, point.y, point.z));
+                    explosion.exp = true;
+
+                    ns *= -1;
+                    we *= -1;
+                    np *= -1;
+                    nz *= -1;
+
+                    if (ns > 480) ns = 480;
+                }
+            }
+
+        }
+    }
+
+    virtual void onConstraintBreak(PxConstraintInfo* constraints, PxU32 count) 
+    {
+        EWork = false;
+    }
+    virtual void onWake(PxActor** actors, PxU32 count) {}
+    virtual void onSleep(PxActor** actors, PxU32 count) {}
+    virtual void onTrigger(PxTriggerPair* pairs, PxU32 count) {}
+    virtual void onAdvance(const PxRigidBody* const* bodyBuffer, const PxTransform* poseBuffer, const PxU32 count) {}
+};
+
+// Initalization of physical scene (PhysX)
+SimulationEventCallback simulationEventCallback;
+Physics pxScene(9.8 /* gravity (m/s^2) */, simulationFilterShader,
+    &simulationEventCallback);
+
+
+
+struct Renderable {
+    Core::RenderContext* context;
+    glm::mat4 modelMatrix;
+    GLuint textureId;
+};
+std::vector<Renderable*> renderables;
+std::vector<glm::vec3> lights;
+std::vector<float> marksizm;
+
+
+
+
+const double physicsStepTime = 1.f / 60.f;
+double physicsTimeToProcess = 0;
+PxMaterial* shipMaterial = nullptr;
+
+int SCR_WIDTH = 600;
+int SCR_HEIGHT = 600;
+
+unsigned int hdrFBO;
+unsigned int colorBuffers[2];
+unsigned int rboDepth;
+unsigned int pingpongFBO[2];
+unsigned int pingpongColorbuffers[2];
+
+bool bloom = true;
+float exposure = 2.5f;
+int oldtime;
+
+unsigned int quadVAO = 0;
+unsigned int quadVBO;
+
+
+void renderQuad()
+{
+    if (quadVAO == 0)
+    {
+        float quadVertices[] = {
+            -1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
+            -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+             1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
+             1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+        };
+        glGenVertexArrays(1, &quadVAO);
+        glGenBuffers(1, &quadVBO);
+        glBindVertexArray(quadVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    }
+    glBindVertexArray(quadVAO);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glBindVertexArray(0);
+}
 
 class Moon {
 public:
@@ -598,6 +698,9 @@ void initRenderables()
 
     leftEngine.start(glm::vec3(-0.648133, 0.645315, 1.67777));
     rightEngine.start(glm::vec3(0.648133, 0.645315, 1.67777));
+
+    
+    explosion.start(glm::vec3(0, 0, 0));
 }
 
 void initPhysicsScene()
@@ -833,6 +936,7 @@ void renderScene()
 {
 
     double time = glutGet(GLUT_ELAPSED_TIME) / 1000.0;
+    appLoadingTime = time;
     static double prevTime = time;
     double dtime = time - prevTime;
     prevTime = time;
@@ -904,6 +1008,7 @@ void renderScene()
     rightEngine.quaterion = glm::quat(pxtr.q.w, pxtr.q.x, pxtr.q.y, pxtr.q.z);
     rightEngine.update(dtime, std::abs(ns / 2.5f));
 
+    explosion.update(dtime);
 
     cameraMatrix = createCameraMatrix();
     perspectiveMatrix = Core::createPerspectiveMatrix(1.f, 3000.f);
@@ -1024,6 +1129,7 @@ void renderScene()
     
         leftEngine.draw();
         rightEngine.draw();
+        explosion.draw();
     }
     else
     {

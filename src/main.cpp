@@ -353,8 +353,6 @@ public:
                 we *= -1;
                 np *= -1;
                 nz *= -1;
-
-                if (ns > 480) ns = 480;
             }
 
         }
@@ -712,7 +710,7 @@ void initPhysicsScene()
     PxShape* shipShape = pxScene.physics->createShape(PxBoxGeometry(1, 1, 1), *shipMaterial);
     shipBody->attachShape(*shipShape);
     shipShape->release();
-    shipBody->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, true);
+    //shipBody->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, true);
     shipBody->userData = renderables[0];
     pxScene.scene->addActor(*shipBody);
 
@@ -720,7 +718,7 @@ void initPhysicsScene()
     PxShape* shipShapeLE = pxScene.physics->createShape(PxBoxGeometry(0.001f, 0.001f, 0.001f), *shipMaterial);
     shipLE->attachShape(*shipShapeLE);
     shipShapeLE->release();
-    shipLE->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, true);
+    //shipLE->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, true);
     shipLE->userData = renderables[1];
     pxScene.scene->addActor(*shipLE);
 
@@ -728,7 +726,7 @@ void initPhysicsScene()
     PxShape* shipShapeRE = pxScene.physics->createShape(PxBoxGeometry(0.001f, 0.001f, 0.001f), *shipMaterial);
     shipRE->attachShape(*shipShapeRE);
     shipShapeRE->release();
-    shipRE->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, true);
+    //shipRE->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, true);
     shipRE->userData = renderables[2];
     pxScene.scene->addActor(*shipRE);
 
@@ -803,7 +801,7 @@ void keyboard(unsigned char key, int x, int y)
 {
     switch (key)
     {
-    case 'w': if (ns>-980) ns-=20;  break;
+    case 'w': if (ns>-480) ns-=20;  break;
     case 's': if (ns < 480) ns+=20; break;
     case 'd': if (we < 28) we += 2; break;
     case 'a': if (we > -28) we -= 2; break;
@@ -1123,9 +1121,9 @@ void renderScene()
         if (tmp2 < 0) tmp2 = 0;
 
         drawObjectColor(programColorWB, &cylinderContext, glm::translate(glm::vec3(cameraPos.x, cameraPos.y, cameraPos.z)) * glm::toMat4(glm::inverse(glm::quat_cast(createCameraMatrix()))) * glm::translate(glm::vec3(-1.05f, 0.1f, -2.4f)) * glm::scale(glm::vec3(0.03f, ((480.f -tmp2) * 0.4f) / 480.f, 0.03f)), glm::vec3(0, 0, 1));
-        drawObjectColor(programColorWB, &cylinderContext, glm::translate(glm::vec3(cameraPos.x, cameraPos.y, cameraPos.z)) * glm::toMat4(glm::inverse(glm::quat_cast(createCameraMatrix()))) * glm::translate(glm::vec3(-1.05f, 0.90f, -2.4f)) * glm::scale(glm::vec3(0.03f, (tmp1*0.4f)/ 980.f, 0.03f)), glm::vec3(1, 0, 0));
+        drawObjectColor(programColorWB, &cylinderContext, glm::translate(glm::vec3(cameraPos.x, cameraPos.y, cameraPos.z)) * glm::toMat4(glm::inverse(glm::quat_cast(createCameraMatrix()))) * glm::translate(glm::vec3(-1.05f, 0.90f, -2.4f)) * glm::scale(glm::vec3(0.03f, (tmp1*0.4f)/ 480.f, 0.03f)), glm::vec3(1, 0, 0));
         drawObjectColor(programColorWB, &cylinderContext, glm::translate(glm::vec3(cameraPos.x, cameraPos.y, cameraPos.z)) * glm::toMat4(glm::inverse(glm::quat_cast(createCameraMatrix()))) * glm::translate(glm::vec3(-1.05f, 0.90f, -2.4f)) * glm::scale(glm::vec3(0.03f, (-tmp2*0.4f)/480.f, 0.03f)), glm::vec3(1, 0, 0));
-        drawObjectColor(programColorWB, &cylinderContext, glm::translate(glm::vec3(cameraPos.x, cameraPos.y, cameraPos.z)) * glm::toMat4(glm::inverse(glm::quat_cast(createCameraMatrix()))) * glm::translate(glm::vec3(-1.05f, 1.7f, -2.4f)) * glm::scale(glm::vec3(0.03f, -((980.f - tmp1) * 0.4f) / 980.f, 0.03f)), glm::vec3(0, 1, 0));
+        drawObjectColor(programColorWB, &cylinderContext, glm::translate(glm::vec3(cameraPos.x, cameraPos.y, cameraPos.z)) * glm::toMat4(glm::inverse(glm::quat_cast(createCameraMatrix()))) * glm::translate(glm::vec3(-1.05f, 1.7f, -2.4f)) * glm::scale(glm::vec3(0.03f, -((480.f - tmp1) * 0.4f) / 480.f, 0.03f)), glm::vec3(0, 1, 0));
     
     
         leftEngine.draw();

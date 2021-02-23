@@ -1000,12 +1000,12 @@ void renderScene()
     leftEngine.positionOfEmiter = glm::vec3(-0.3240665, 0.4, 0.838885);
     leftEngine.positionOfShip = glm::vec3(pxtr.p.x, pxtr.p.y, pxtr.p.z);
     leftEngine.quaterion = glm::quat(pxtr.q.w, pxtr.q.x, pxtr.q.y, pxtr.q.z);
-    leftEngine.update(dtime, std::abs(ns / 2.5f));
+    leftEngine.update(dtime, std::abs(ns / 1.25f));
 
     rightEngine.positionOfEmiter = glm::vec3(0.28, 0.35, 0.838885);
     rightEngine.positionOfShip = glm::vec3(pxtr.p.x, pxtr.p.y, pxtr.p.z);
     rightEngine.quaterion = glm::quat(pxtr.q.w, pxtr.q.x, pxtr.q.y, pxtr.q.z);
-    rightEngine.update(dtime, std::abs(ns / 2.5f));
+    rightEngine.update(dtime, std::abs(ns / 1.25f));
 
     explosion.update(dtime);
 

@@ -28,6 +28,8 @@ int points = 0;
 int timeToEnd = 360;
 bool block = false;
 
+bool EWork = true;
+
 PxFixedJoint* joint1;
 PxFixedJoint* joint2;
 
@@ -80,7 +82,10 @@ public:
         }
     }
 
-    virtual void onConstraintBreak(PxConstraintInfo* constraints, PxU32 count) {}
+    virtual void onConstraintBreak(PxConstraintInfo* constraints, PxU32 count) 
+    {
+        EWork = false;
+    }
     virtual void onWake(PxActor** actors, PxU32 count) {}
     virtual void onSleep(PxActor** actors, PxU32 count) {}
     virtual void onTrigger(PxTriggerPair* pairs, PxU32 count) {}
@@ -187,7 +192,7 @@ void drawObjectTexture(Core::RenderContext* context, glm::mat4 modelMatrix, GLui
     GLuint program = programTexture;
 
     glUseProgram(program);
-    glUniform3f(glGetUniformLocation(program, "lightPosCube"), 60, 10, 60);
+    glUniform3f(glGetUniformLocation(program, "lightPosCube"), 100, 10, -10);
     Core::SetActiveTexture(textureId, "textureSampler", program, 0);
 
     glm::mat4 transformation = perspectiveMatrix * cameraMatrix * modelMatrix;
@@ -318,7 +323,7 @@ public:
     }
     void draw()
     {
-        for (unsigned int i = 0; i < nr_particles; ++i)
+        if (EWork) for (unsigned int i = 0; i < nr_particles; ++i)
         {
             Particle& p = particles[i];
             drawObjectColor(&circleContext, glm::translate(positionOfShip)*glm::toMat4(quaterion)*glm::translate(positionOfEmiter)*glm::translate(p.Position)*glm::scale(glm::vec3(0.5f)), p.Color);

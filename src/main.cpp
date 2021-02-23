@@ -68,7 +68,7 @@ void drawObjectTexture(Core::RenderContext* context, glm::mat4 modelMatrix, GLui
     GLuint program = programTexture;
 
     glUseProgram(program);
-    glUniform3f(glGetUniformLocation(program, "lightPosCube"), 100, 10, -10);
+    glUniform3f(glGetUniformLocation(program, "lightPosCube"), cubePos.x, cubePos.y, cubePos.z);
     Core::SetActiveTexture(textureId, "textureSampler", program, 0);
 
     glm::mat4 transformation = perspectiveMatrix * cameraMatrix * modelMatrix;
@@ -486,6 +486,8 @@ public:
     std::vector<Moon*> children;
     PxRigidDynamic *planetBody;
     Renderable* renderable;
+    int radius;
+    int size;
     int ri = 0;
 
     void init(GLuint t, std::string n, float v, glm::vec3 a) {
@@ -1034,10 +1036,14 @@ void renderScene()
             glm::mat4 rotator = planet->createRotator(rotateTime);
             if (planet->name == "sun") {
                 planet->modelMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, 0)) * glm::scale(glm::vec3(30));
+                planet->radius = 0;
+                planet->size = 30;
                 planet->renderSun();
             }
             else if (planet->name == "mercury") {
                 planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -65.0f)) * glm::scale(glm::vec3(5));
+                planet->radius = 65;
+                planet->size = 5;
                 planet->updateTargetPhysx();
                 planet->render();
                 for (Moon* child : planet->children) {
@@ -1049,6 +1055,8 @@ void renderScene()
             }
             else if (planet->name == "venus") {
                 planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -120.0f)) * glm::scale(glm::vec3(15));
+                planet->radius = 120;
+                planet->size = 15;
                 planet->updateTargetPhysx();
                 planet->render();
                 for (Moon* child : planet->children) {
@@ -1060,6 +1068,8 @@ void renderScene()
             }
             else if (planet->name == "neptune") {
                 planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -190.0f)) * glm::scale(glm::vec3(25));
+                planet->radius = 190;
+                planet->size = 25;
                 planet->updateTargetPhysx();
                 planet->render();
                 for (Moon* child : planet->children) {
@@ -1071,6 +1081,8 @@ void renderScene()
             }
             else if (planet->name == "hoth") {
                 planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -280.0f)) * glm::scale(glm::vec3(28));
+                planet->radius = 280;
+                planet->size = 28;
                 planet->updateTargetPhysx();
                 planet->render();
                 for (Moon* child : planet->children) {
@@ -1082,6 +1094,8 @@ void renderScene()
             }
             else if (planet->name == "saturn") {
                 planet->modelMatrix = rotator * glm::translate(glm::mat4(1.0), glm::vec3(0.0f, 0.0f, -380.0f)) * glm::scale(glm::vec3(35));
+                planet->radius = 380;
+                planet->size = 35;
                 planet->updateTargetPhysx();
                 planet->render();
                 for (Moon* child : planet->children) {
@@ -1101,7 +1115,26 @@ void renderScene()
         if (glm::distance(cubePos, glm::vec3(pxtr.p.x, pxtr.p.y, pxtr.p.z)) < 2)
         {
             points += 1;
-            cubePos = glm::ballRand(100.f);
+            bool collision = true;
+            while (collision)
+            {
+                collision = false;
+                cubePos = glm::ballRand(350.f);
+                float radius = glm::distance(glm::vec3(0.f), cubePos);
+                for (Planet* planet : planets)
+                {
+                    if (radius > (planet->radius - (planet->size / 2.f)))
+                    {
+                        if (radius < (planet->radius + (planet->size / 2.f)))
+                        {
+                            collision = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            float g = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
+            cubePos = glm::vec3(cubePos.x, (50 * g) - 25, cubePos.z);
         }
 
         drawCube(glm::translate(cubePos));

@@ -830,7 +830,7 @@ glm::mat4 createCameraMatrix()
     PxTransform pxtr = shipBody->getGlobalPose();
     glm::quat pxtq = glm::quat(pxtr.q.w, pxtr.q.x, pxtr.q.y, pxtr.q.z);
     glm::vec3 cameraDirMat = pxtq * glm::vec3(0, 0, 1);
-    glm::vec3 offset = cameraDirMat * camera;
+    glm::vec3 offset = cameraDirMat * 2;
     cameraPos = offset + glm::vec3(pxtr.p.x, pxtr.p.y, pxtr.p.z);
 
 
@@ -1012,7 +1012,7 @@ void renderScene()
     explosion.update(dtime);
 
     cameraMatrix = createCameraMatrix();
-    perspectiveMatrix = Core::createPerspectiveMatrix(1.f, 3000.f);
+    perspectiveMatrix = Core::createPerspectiveMatrix(frustumscale);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -1278,10 +1278,17 @@ void idle()
 
 void onReshape(int width, int height)
 {
-    frustumscale = width / height;
-    glViewport(0, 0, width, height);
-    SCR_WIDTH = width;
-    SCR_HEIGHT = height;
+    frustumscale = (float)width / height;
+    int w = width;
+    int h = height;
+    if (width > height)
+        h = height * frustumscale;
+    if (height > width)
+        w = width * frustumscale;
+    glViewport(0, 0, w, h);
+    SCR_WIDTH = w;
+    SCR_HEIGHT = h;
+    std::cout << w << " " << h << std::endl;
     glGenFramebuffers(1, &hdrFBO);
     glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
 

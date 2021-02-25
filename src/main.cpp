@@ -714,6 +714,7 @@ void initPhysicsScene()
     shipShape->release();
     //shipBody->setActorFlag(PxActorFlag::eDISABLE_GRAVITY, true);
     shipBody->userData = renderables[0];
+    shipBody->setMass(0.6f);
     pxScene.scene->addActor(*shipBody);
 
     shipLE = pxScene.physics->createRigidDynamic(PxTransform(80, 11, 0));
@@ -1136,7 +1137,6 @@ void renderScene()
             float g = static_cast <float> (rand()) / static_cast <float> (RAND_MAX);
             cubePos = glm::vec3(cubePos.x, (50 * g) - 25, cubePos.z);
         }
-
         drawCube(glm::translate(cubePos));
 
         text(10, 10, "Points: " + std::to_string(points), 18);
@@ -1329,7 +1329,7 @@ int main(int argc, char** argv)
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
     glutInitWindowPosition(0, 0);
-    glutInitWindowSize(600, 600);
+    glutInitWindowSize(1920, 1018);
     glutCreateWindow("Space Simulator");
     glewInit();
 
